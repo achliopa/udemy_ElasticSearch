@@ -149,7 +149,7 @@ X-Pack is clustrer manager
 * [Java Download](http://www.oracle.com/technetwork/java/javase/downloads/index.html)
 * [Elasticsearch Download](https://www.elastic.co/downloads/elasticsearch)
 * Elastic is not installed but executed. its dependency is Apache Lucene and is packaged as .jar file
-* >= java8 is needed (we have it)
+* at least java8 is needed (we have it)
 * we download elasticsearch as a tarball and extract it (tar -zxf)
 * lib folder contains jars, config contains config files (elastic, jvm, log4j), bin folder contains binaries (win, linux,mac)
 * we start it localy by entering the bin direcory and runing `./elasticsearch` in the console
@@ -176,15 +176,286 @@ X-Pack is clustrer manager
 
 ### Lecture 17 - Configuring Elasticsearch
 
-* 
+* we go to config folder on elasticsearch installation and open elasticsearch.yml file
+* default options are great so we dont need to tweak anything but we will go through it for learning
+* we can change the cluster name `cluster.name: <my-application>` by default the cluster will be named elasticsearch. use _dev and_prod differentiators in the name if needed
+* we can specify the name of te node it will be started up on the machine `node.name: <node-1>` the installation he have setup is a single node. to start more nodes we have to repeat the installation process on another machine. what we get from this is per-node configuration. nodes might scale or replaced so we need proper node naming
+* we can specify the network host and port to which nodes listen for request
+
+```
+# Set the bind address to a specific IP (IPv4 or IPv6):
+network.host: 192.168.0.1
+# Set a custom port for HTTP:
+http.port: 9200
+```
+
+* we have discovery section with an option specifying the unicast hosts. these are the nodes the node we configure will try to contact. when starting the node needs to contact a node in a cluster or form a cluster of its own. the ips we specify there are the ones the node will try to contact when joining a cluster
+
+```
+# Pass an initial list of hosts to perform discovery when new node is started:
+# The default list of hosts is ["127.0.0.1", "[::1]"]
+#
+#discovery.zen.ping.unicast.hosts: ["host1", "host2"]
+#
+# Prevent the "split brain" by configuring the majority of nodes (total number of master-eligible nodes / 2 + 1):
+#
+#discovery.zen.minimum_master_nodes: 
+#
+# For more information, consult the zen discovery module documentation.
+```
+
+* we dont have to specify all nodes there, this is unmaintanable. just one node is enought o retrieve the current cluster state. after retrieving the cluster state from a node it contacts the master node to join the cluster. dnt change minimum master nodes as it messes things up
+
+* always restart the node after changing the configuration
 
 ### Lecture 18 - Installing Kibana on Mac/Linux
 
-* [Kibana Download](https://www.elastic.co/downloads/kibana) 
+* [Kibana Download](https://www.elastic.co/downloads/kibana)
+* if we are using docker, kibana is bundled on port 5601 at elasticsearch image
+* we go to the link and download for our os (linux 64)
+* we extract the tar (tar -zxf) and enter its dir
+* to start kiban we need to run the kibana script in bin dir (./bin/kibana)
+* we can hit its websearver in chrome at `http://localhost:5601`
+* when we start kibana elasticsearch cluster must be running
+* we stop kibana with Ctrl+C
 
 ### Lecture 20 - Configuring Kibana
 
 * [Kibana Config Options](https://www.elastic.co/guide/en/kibana/current/settings.html)
+* kibana config file is stored in config directory and is named kibana.yml
+* the first option we might need to change is host and port of kibana server (defaults localhost:5601)
 
+```
+# Kibana is served by a back end server. This setting specifies the port to use.
+#server.port: 5601
 
-### Lecture 22 - intro to Kibana and dev tools
+# Specifies the address to which the Kibana server will bind. IP addresses and host names are both valid values.
+# The default is 'localhost', which usually means remote machines will not be able to connect.
+# To allow connections from remote users, set this parameter to a non-loopback address.
+#server.host: "localhost"
+```
+
+* we can change the serve name 
+
+```
+# The Kibana server's name.  This is used for display purposes.
+#server.name: "your-hostname"
+```
+
+* we can change the elasticsearch url. kibana needs to communicate with an elasticsearch cluster
+
+```
+# The URL of the Elasticsearch instance to use for all your queries.
+#elasticsearch.url: "http://localhost:9200"
+``` 
+
+* kibana creates an index in elasticsearch for storing data. we can customize its name there
+
+```
+# Kibana uses an index in Elasticsearch to store saved searches, visualizations and
+# dashboards. Kibana creates a new index if the index doesn't already exist.
+#kibana.index: ".kibana"
+```
+
+* other options include SSL, timeouts, logging
+* restart kibana after changing config file so that changes take effect
+
+### Lecture 21 - Kibana requires data to be available
+
+* Kibana on recent versions requires data to be present in the cluster before being able to configurew an index pattern . We need to import data in teh cluster before working with kibana. (Lecture 32 & 33) . We will import data follwing LEcture 32 before going back to next lecture
+
+### Lecture 22 - Intro to Kibana and dev tools
+
+* in the home page of kibana at localhost:5601 we are prometed to set up index patterns
+* here we can enter a pattern for which indeices we want to include in kibana ui
+* we insert * to incude all existing indices, kibana finds our avaialble indices (product from lecture 33)
+* we uncheck time-based events (not relevant in our application) in advances options and click create
+* our aim is to use the console in the dev tools to visualize our queries to the elasticsearch cluster. the API is the same HTTP RESTful and we can use also POSTMAN to insert our queries
+* a default query is avaialble for us to test the console
+
+* to send queries to the cluster we use HTTP requests. the request is composed by the http verb the request URI and request body. as the API is RESTful the verb is important (GET,POST,PUT,DELETE)
+* in kibana devtools we start in console by writing the verb
+* then we add the request URI (relative path excluding the http://host:port). the uri is structured /<index>/<type>/<api> so a rule is 
+
+```
+<HTTP verb> /<index>/<type>/<api>
+```
+
+* type is usually default (types are obsolete)
+* api starts with _ (e.g _search _bulk)
+* the console lets us cp the query to use it in cURL (wrench icon)
+* if kibana runs on docker the command generated by the devtools console uses elasticsearch as hostname, because kibana runs in a different container in the virtual network, but if i run the command from my machine so outside the docker network the port 5601 is publixhed so i have to use localhost instead
+* to add a request body (JSON in dev tools i just add my JSON script directly undter the URI in next line
+* the generated cURL command uses -H flag to specify content-type json and -d flag to paste the JSON code of the body 
+
+```
+curl -XGET "http://localhost:9200/product/default/_search" -H 'Content-Type: application/json' -d'
+{
+  
+}'
+```
+
+## Section 4 - Managing Documents
+
+### Lecture 23 - Creating an Index
+
+*
+
+### Lecture 32 - Batch processing
+
+* To import test data we will use batch processing, this means we will add many documents in a single request. each request has overhead in data and time
+* Batch processing is done by using a special format for the request body using whats called the Bulk API.
+* Bulk API is used to add, update or delete documents
+* what we have to do is to send a POST request to /product/default/_bulk
+* in Kibana (localhost:5601) we go to Dev Tools -> Console we enter
+
+```
+POST /product/default/_bulk
+{"index": {"_id":"100"}}
+{"price":100}
+{"index": {"_id":"101"}}
+{"price":101}
+```
+
+* the operation is  "index" to add a document to the index and for key we add a JSON object
+* within the JSON object we add an "_id" key with the ID of the document we want to add and givie it a value of 100
+* this was the action part. we need to add a document for the id of 100 we added. our document will contain only a price of 100. this is a JS literal
+* we need to add multiple objects so that the BulkAPI makes sense.
+* we cp the action and doc part of the query by increasing the value from 100 to 101
+* this request will index 2 documents with IDs of 100 and 101
+* we run the query and get the following response
+
+```
+{
+  "took": 604,
+  "errors": false,
+  "items": [
+    {
+      "index": {
+        "_index": "product",
+        "_type": "default",
+        "_id": "100",
+        "_version": 1,
+        "result": "created",
+        "_shards": {
+          "total": 2,
+          "successful": 1,
+          "failed": 0
+        },
+        "_seq_no": 0,
+        "_primary_term": 1,
+        "status": 201
+      }
+    },
+    {
+      "index": {
+        "_index": "product",
+        "_type": "default",
+        "_id": "101",
+        "_version": 1,
+        "result": "created",
+        "_shards": {
+          "total": 2,
+          "successful": 1,
+          "failed": 0
+        },
+        "_seq_no": 1,
+        "_primary_term": 1,
+        "status": 201
+      }
+    }
+  ]
+}
+```
+
+* the response is similar like running a single query (status per action).
+* in BulkAPI it might happen that 1 action fails and the rest pass. ther error property is global though. si we check the error property and then search in the reply what failed (status)
+* we will now see how to update and deletein bulk API
+* our query updates the doc with id 100 price to 1000 and deletes the second document with id 101
+
+```
+POST /product/default/_bulk
+{"update": {"_id":"100"}}
+{"doc": {"price": 1000}}
+{"delete": {"_id":"101"}}
+```
+* the reply is 
+
+```
+{
+  "took": 31,
+  "errors": false,
+  "items": [
+    {
+      "update": {
+        "_index": "product",
+        "_type": "default",
+        "_id": "100",
+        "_version": 2,
+        "result": "updated",
+        "_shards": {
+          "total": 2,
+          "successful": 1,
+          "failed": 0
+        },
+        "_seq_no": 2,
+        "_primary_term": 1,
+        "status": 200
+      }
+    },
+    {
+      "delete": {
+        "_index": "product",
+        "_type": "default",
+        "_id": "101",
+        "_version": 2,
+        "result": "deleted",
+        "_shards": {
+          "total": 2,
+          "successful": 1,
+          "failed": 0
+        },
+        "_seq_no": 3,
+        "_primary_term": 1,
+        "status": 200
+      }
+    }
+  ]
+}
+```
+
+* to verify price we retieve the first document with 
+
+```
+GET /product/default/100
+```
+
+* the reply is OK, if we search for 101 the result is not found
+
+```
+{
+  "_index": "product",
+  "_type": "default",
+  "_id": "100",
+  "_version": 2,
+  "found": true,
+  "_source": {
+    "price": 1000
+  }
+}
+```
+
+* we delete the 100 as well to prepare for next lecture
+
+### Lecture 33 - Importing Test  Data and cURL
+
+* we have a test JSON document consisting of 1000 docs representing foods and drinks products with price. 
+* we can cp the contents of the file in kibanas dev tools console but we will try cURL
+* we go tto the dir where the test file resides
+* we will read the data from the file and send its contents to elasticsearch without any processing
+* the complete command is `curl -H "Content-Type: application/json" -XPOST "http://localhost:9200/product/default/_bulk?pretty" --data-binary "@test-data.json"`
+* the above dommand parsed data from a file and uses post command setting the header content-type param
+
+* the import is successful
+
+* [cURL download]()
