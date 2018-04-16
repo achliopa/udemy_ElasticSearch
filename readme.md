@@ -263,6 +263,7 @@ http.port: 9200
 ### Lecture 21 - Kibana requires data to be available
 
 * Kibana on recent versions requires data to be present in the cluster before being able to configurew an index pattern . We need to import data in teh cluster before working with kibana. (Lecture 32 & 33) . We will import data follwing LEcture 32 before going back to next lecture
+* THIS IS SO WRONG. There is no need to do it. I dont know why the tutor says so
 
 ### Lecture 22 - Intro to Kibana and dev tools
 
@@ -299,7 +300,68 @@ curl -XGET "http://localhost:9200/product/default/_search" -H 'Content-Type: app
 
 ### Lecture 23 - Creating an Index
 
-*
+* we will create an index to add documents to it. it will be named products
+* the command in kibana console is PUT /product?pretty` pretty is a flag to make the JSON pretty, this is relevant for other tools to structure the response in a human friendly way. so a general rule to create an index is PUT /<index>?pretty
+* cluster replies 
+
+```
+{
+  "acknowledged": true,
+  "shards_acknowledged": true
+}
+```
+
+* this is a simple command using the default replicas and shards
+
+### Lecture 24 - Adding Documents
+
+* the VERB for adding documents is `POST /<index>/<type>` in our case `POST /product/default`
+* the request body must be a valid JSON object. any object is accepted
+
+```
+{"name": "Processing Events with Logstash",
+  "instructor": {
+    "firstname": "Bo",
+    "lastname": "Andersen"
+  }
+}
+```
+
+* the reply from the cluster is
+
+```
+{
+  "_index": "product",
+  "_type": "default",
+  "_id": "THgAy2IBN9aihGl6IhMT",
+  "_version": 1,
+  "result": "created",
+  "_shards": {
+    "total": 2,
+    "successful": 1,
+    "failed": 0
+  },
+  "_seq_no": 201,
+  "_primary_term": 1
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### Lecture 32 - Batch processing
 
