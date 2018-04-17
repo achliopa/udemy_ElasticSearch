@@ -791,6 +791,112 @@ health status index   uuid                   pri rep docs.count docs.deleted sto
 yellow open   product R5K7ozuLQEmRSu0O_UoRhQ   5   1       1000            0    503.8kb        503.8kb
 green  open   .kibana x1uJQoGjTwyyRkjs5YbDJQ   1   0          2            1     13.1kb         13.1kb
 ```
- * info we get is health, storage usednum of docs
- * to see shards allocation we use `GET /_cat/allocation?v` with info on disk usage
- * for shards `GET /_cat/shards?v` for doc distribution etc
+* info we get is health, storage usednum of docs
+* to see shards allocation we use `GET /_cat/allocation?v` with info on disk usage
+* for shards `GET /_cat/shards?v` for doc distribution etc
+
+## Section 5
+
+### Lecture 35 - Introduction to Mapping
+
+* mappings define how documents and theirs fields should be stored and indexed
+* the reson for that is to store and index data in a way that is appropriate for how we want to search our data
+* a couple of examples of what mappings can be used is to define which fields should be treated as full text fields, which fields contain numbers, dates or geo locations
+* we can also specify date formats for date fields or specify analyzers for full text fields
+* mappings in elasticsearch is like a schema for tables in relational dbs
+* for simple use cases mappings are not needed, but for great control over how elasticsearch handles our data we need to know about mappings
+
+### Lecture 36 - Dynamic Mapping
+
+* [config date detection](https://www.elastic.co/guide/en/elasticsearch/reference/current/dynamic-field-mapping.html#date-detection)
+* mapping can be defined explicitly when we tell elasticsearch what to do with our data when we add new documents or update new ones. docs are immutable so to update them we replace existing ones
+* Dynamic mapping is an alternative way to explicitly define document field data types
+* It is used by elasticsearch when we add new docs. it will add default data types for fileds that dont have mappings, by inspecting the types of values for a docs fields
+* if a field in a doc we add has a value of formatted data elasticsearch will add the "date" data type. we can add rules and defaults for dynamic mapping
+* to see the mappings elastic has added with default mapping for the docs we have added we use the mapping API `GET /<index>/<type>/_mapping`
+
+```
+GET /product/default/_mapping
+# reply
+ {
+  "product": {
+    "mappings": {
+      "default": {
+        "properties": {
+          "created": {
+            "type": "date",
+            "format": "yyyy/MM/dd HH:mm:ss||yyyy/MM/dd||epoch_millis"
+          },
+          "description": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "in_stock": {
+            "type": "long"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "price": {
+            "type": "long"
+          },
+          "sold": {
+            "type": "long"
+          },
+          "tags": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+* we see that it does date detection based on formats. we can configure or disable date detection (see link)
+* for ints elastic uses long type as it does not num size we intend to use
+* for text fields apart from text type which is norla elastic adds a fields property of type keyword. text is used for full type searches and keyword for exact matches, agregations eta ll
+
+### Lecture 37 - Meta Fields
+
+* we saw that docs stored in elastic have meta-data associated with them. these fields are called meta-fields. there are 10 meta fields
+* _index contains the name of the index to which the document belongs. is added by elastic autom and is used by elastic intrnally when querying docs in index. but can explicitly used in search queries to search for docs in multiple indexes
+ * _id stored the id of the doc. we dont query it explicitly but is used in queries when we query by id
+* _source contains the original JSON object that was passed in elastic when doc was indexed. we cannot  search it but we can retrieve it.
+* _field_names contains the names of every field that contains non-null val. this is used with query named exists. which matches docs that contain a non-null val for a given field
+* _routing sotres the value used to route a doc into a shard
+* _version stores the internall version of the doc. it increases on any update
+* _meta may be used to store custom data that is left untouched by elastic e.g app specific data
+
+ ### Lecture 38 - Field Data Types
+
+* 4 categories of field data types: Core Data Types, Complex Data Types, Geo Data Types, Specialized Data Types
+* Core Data Types:
+  * Text Data Type (text): used to index full-text value such as desc. Values are analyzed. Full-text fields are rarely used for sorting and aggregating documens due to their nature. for this keyword are used. they are sotred in a way optimal ofr full-text searches
+  * Keyword Data Type (keyword): Used for structured data (tags, categories, email-addr...) Not analyzed. Typically used for filtering and aggregations. they are stored as is
+  * Numeric Data Types: basic numeric data types, most of which are found in various programming langs. (... byte ... scaled_float, half_float ...) byte(-127,128) scalled _float is a float storeda s a long in elastic (possible through the use of scaling factor). integers are easier to compress. long is trasformed back to float at index time
+  * Date data type (date): represents dates as either as tring, long or it. the date format may be configured. default type is string or timestamp in ms. internally dates are stored as long (timestamp) in ms since epoch
+  * Boolean data Type (boolean): sores boolean vals
+  * Binary Data Type (binary): acceptsa Base65 encoded binary val. not stored by default. so we cannot search it or retrieve it outside of _source. this can be configured with store option
+  * Range Data Types: used for range  values such as date ranges or numeric ranges (e.g 10-20) integer_range, float_range, long_range, double_range, date_range. we define alower and upper boundary when indexing the doc. using "gt, "gte","lt","lte" (e.g. {"gte": 10, "lte": 20})
+Complex Data Types:
