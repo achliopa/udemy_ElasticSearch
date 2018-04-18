@@ -899,4 +899,118 @@ GET /product/default/_mapping
   * Boolean data Type (boolean): sores boolean vals
   * Binary Data Type (binary): acceptsa Base65 encoded binary val. not stored by default. so we cannot search it or retrieve it outside of _source. this can be configured with store option
   * Range Data Types: used for range  values such as date ranges or numeric ranges (e.g 10-20) integer_range, float_range, long_range, double_range, date_range. we define alower and upper boundary when indexing the doc. using "gt, "gte","lt","lte" (e.g. {"gte": 10, "lte": 20})
-Complex Data Types:
+* Complex Data Types: these datatypes are not primitive, but more complex (arrays , objects)
+  * Object Data Type: added as JSON objects. stored as key-value pairs internally where structure gets flattened out but key naming keeps hierarchy. may contain nested objects
+
+  ```
+  # index time
+  {
+    "name": {
+    "firstname": "Bo",
+    "lastname": "Andersen"
+    },
+    "profession": "Software Engineer"
+  }
+  # Stored
+  {
+    "name.firstname": "Bo",
+    "name.lastname": "Andersen",
+    "profession": "Software ENgineer"
+  }
+  ```
+  * Array Data Type: not an actual data type, because each field may contain multiple values by default. any field in a doc can contain 0:n values by deafult like an array of nums, strngs, objects etc. this holds without us having to explicitly declare it. we can have nested arrays. but they are flattened when indexed. in arrays all vals have to be of same datatype. if we dont expricitly se type. the type of first element will be used to set the data type. if we storearray of objects we cannot query them individualy. objecs get flattened and Apache Lucene has no concept of inner objects. association between obkject vals is lost.
+
+  ```
+  {
+    "persons": [
+      {"name": "Bo Andersen", "age":28},
+      {"name": "Mika Hakinen", "age":20}
+    ]
+  }
+  # becomes
+  {
+    "persons.name": ["Bo Andersen","Mika Hakinen"],
+    "persons.age": [20,28],
+  }
+  ```
+
+  * Nested Data Type (nested): solves the problem of object arrays and querying them individualy. is a specialized version of the object data type. enables arrays of objects to be qualified independently of each other. object are stored as hifdden docs. we need to use "nested" queries to use it
+* Geo Data Types: data types that are used for geographical data (e.g lat long pair)
+  * Geo-point Data Type (geo_point): accepts latitude longitude paires. used for various geographical operations. it accepts 4 formats for coordinates
+  * Geo-Shape Data Type (geo_shape): used for more geographical shapes like polygons, circles etc. (point, linestring,multipoint, multilinestring, multipolygon, geometrycollection, envelope). used to stoe shapeof geo datas, borders. shapes are represented with GeoJSON
+* Specialized Data Types: data types with very specific purpose (e.g storing IP addr)
+  * IP Data Type (ip): Used for storing IPv4 and IPv6 addresses, query them with CIDR notation
+  * Completion Data Type (completion): used to provide auto-completion ("search as you type") functionality. opimized for quick lookups. using suggesters. is very fast
+  * Attachment Data Type (attachment): requires the Ingest Attachment Processor Plugin. Used to make text from various document formats searchable (e.g PPT, PDF, RTF). Uses Apache Tika internally for text recognition `sudo bin/elasticsearch-plugin install ingest-attachment`. Tika can be used at application level (get full text search it outside elastic)
+
+### Lecture 39 - Adding Mappings to existing Indices
+
+* we have in our cluster an index *products* and some documents indexed in it. 
+* we will add a new field in the mapping (aka schema). a discount field of double data type
+* the syntax is `PUT /<index>/<type>/_mapping` and the JSON req body contains a "properties" JSON obect with our fields to be added and their types declared as a mapping obejct containing the type
+
+```
+PUT /product/default/_mapping
+ {
+  "properties": {
+    "discount": {
+      "type": "double"
+    }
+  }
+}
+# reply
+{
+  "acknowledged": true
+}
+```
+
+* to verify we inspect the mappings like we saw before. 
+* now docs with discount field can be added
+
+### Lecture 40 - Changing Existing Mappings
+
+* if we try changin existing mappings by using the previous lectures query to change the type from double to integer we get an error (illegal argument exception)
+* existing field mappings cannot be updated
+* we must delete the index, create a new mappings and reindex the data into the new index
+* if we could update mappings we would invalidate any docs already added to the index
+* we wipe out the index `DELETE /<index>`
+* we recreate the index AND its mapping explicitlyin one query 
+
+```
+PUT /product
+{
+"mappings": {
+    "default": {
+      "dynamic": false,
+      "properties": {
+        "in_stock": {
+          "type": "integer"
+        },
+        "is_active": {
+          "type": "integer"
+        },
+        "price": {
+          "type": "integer"
+        },
+        "sold": {
+          "type": "long"
+        }
+      }
+    }
+  }
+}
+# reply
+{
+  "acknowledged": true,
+  "shards_acknowledged": true,
+  "index": "product"
+}
+``` 
+
+* at this point we can add the test data but only the simple ones will pass ans we are missing field mappings for the compolex ones. 
+* we will complete mappings before indexing the test data
+* the EXCEPTIONS to the NO MAPPING UPDATE rule are objects where we can addproperties and text fields whjere we can add the keyword type
+
+### Lecture 41 - Mapping Parameters
+
+* 
