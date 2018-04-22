@@ -1334,4 +1334,20 @@ POST /product/_update_by_query?conflicts=proceed
 
 ### Lecture 47 - Intro to the analysis process
 
-* 
+* what it means that a text is analyzed? it means that when indexing a document its full text fields are run through an analysis procees. full text fields are fields of type "text". analyzing means tokenizing the text in terms, locating text etc
+* the analysis process means normaizing and tokenizing text to make it easier to search
+* we have full control over which analyzer to use. standard analyzer is enough for most cases. results of analysis is what is stored in the inverted index. when we search through text we search through the results of the analysis process (inverted index) not in the actual text
+
+### Lecture 48 - A closer look at analyzers
+
+* the conversion we talked before is done by the nalyzer. the analyzer consists of 3 things: character filters, token filters, tokenizer
+* the analyzer is a package of these 3 building blocks each one changing the input stream
+* when being indexed the document goes through the following flow:
+  * serial or more character filters can be added. a character filter receives the original text and can transform the value by adding removing or changing characters e.g <strong>Two</strong>words! => Two words!
+  * after the tokenizer splits the text into individual tokens which are usually words. e.g for a sentence of 10 words we would get an array of 10 words. Two words! => [Two,words]. an analyzer may have only one tokenizer. by default a tokenizer name standrd is used. this uses a unicode text segmentation algorithm, it splits by whitespace and removes special symbols. tokenizers store the psosition of tokes. start position and offset of the words they represent. this matching is useful when highlighting the found words. also are used for fuzzy phrase searches and  proximity searches
+  * then is passes from serial or more token filters. a token filter may add remove or change tokens. like character filters but working on token stream. many of them exist. simplest one is lowercase filter [Two,words] => [two,words]. another filter removes stub words. little sgnificance in terms of relevance. other filter is synonym. gives similar words same meaning semantically
+  * in elastic search if no special analyzer is specified,. the default is the standard analyzer.
+  with the standard analyzer there is no character filter. text goes straight to tokenizer. the tokenizer used is one named standard (filters out symbols, split by whitespace)  I'm in the mood for drinking semi-dry red wine! => [I'm, in, the, mood, for, drinking, semi, red, wine]. this array of tokens is sent ot a chain of token filters. first one is standard. it does nothing. just a placeholder for future filters, stub token filter is added but disabled. the only token filter used wihth thes default standard analyzer is the lowercase
+  * there s an analyze API to test the results of applying character filters, tokenizers, and token filters as a whole
+
+  ### Lecture 49 - Using the Analyze API
