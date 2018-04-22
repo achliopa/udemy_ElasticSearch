@@ -2,6 +2,8 @@
 [course](https://www.udemy.com/elasticsearch-complete-guide/learn/v4/overview)
 [repo](https://github.com/codingexplained/complete-guide-to-elasticsearch)
 
+## IMPORTANT UPDATE: since version 7 types will be removed and default type should be replace with the *_doc* type 
+
 ## Section 1 - Getting Started
 
 ### Lecture 2 - Intro to Elasticsearch
@@ -987,7 +989,7 @@ PUT /product
           "type": "integer"
         },
         "is_active": {
-          "type": "integer"
+          "type": "boolean"
         },
         "price": {
           "type": "integer"
@@ -1012,5 +1014,324 @@ PUT /product
 * the EXCEPTIONS to the NO MAPPING UPDATE rule are objects where we can addproperties and text fields whjere we can add the keyword type
 
 ### Lecture 41 - Mapping Parameters
+
+* [Mapping Parameters](https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-params.html)
+* [Custom Date Formats](http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html)
+* [Biolt In Date Formats](https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-date-format.html#built-in-date-formats)
+* we will look at parameters used to configure field mappings
+* coerce: can be used to disable coercion (automatically cleaning up values, or trasformation to the correct type if data coming are another type). the result of disabling coerce is that elastic will reject docs with fields that dont match the type
+copy_to: eanblaes us to create custom field from other fields. copies field values into a given field. it copie values not terms that are output fromt he analyzer
+
+```
+{
+  "first_name": {
+    "type": "text",
+    "copy_to": "full_name"
+  },
+  "last_name": {
+    "type": "text",
+    "copy_to": "full_name"
+  },
+  "full_name": {
+    "type": "text"
+  }
+}
+```
+
+* copied values will not show up in the _source meta field
+* dynamic: enables or disables adding fields to documents or inner objects dynamically. it eanbles/disables dynamic mapping for new fields as you ve seen. by default elastic uses dynamic mapping for new fields. we can disable enable selectively in document or inner objects. disabling dynamic mapping forbids adding new fields if they are mapped before. if it sets false it ignores it , if it set strict it rejects the doument and does not index it.
+* properties: this param contains the field mappings, aither at the top level of documents or with inner objects. it is used as a wrapper at any level to frap field mappings
+* it is also used when defining fields in an object or nested field.
+* norms: it defines whether or not to disable storing norms (used for relevance scores).this is because elastic doens just sees if document matches but it works out how well a document matches. so it stores some info to calculate relevance scores. we can disable/enable that with the norm param. for fields  that are used for aggregations or filtering this might be acceptble, we cannot reenable norms without re recreating the index
+
+```
+{
+  "properties": {
+    "full_name": {
+      "type": "text",
+      "norms": false
+    }
+  }
+}
+```
+
+* format: defines the format for date fields `yyyy-MM-dd` 'epoch_millis' `epoch _second` ... custom formats are accepted.  the default format is *strict_date_optional_time || epoch_millis*
+* null_value: replace NULL values with the specified value
+
+```
+{
+  "properties": {
+    "discount": {
+      "type": "integer",
+      "null_value": )
+    }
+  }
+}
+```
+
+* fields: it is used to index fields in different ways
+
+### Lecture 42 - Adding Multi-Field Mappings
+
+* we will use the *fields* param to add more keyword mappings to text fields and also the *properties* param. we, ve seen this multi mapping struct when we insert unmapped data and elastic replies with the dynamic mapping map.
+
+```
+PUT product/default/_mapping
+{
+  "properties": {
+    "description": {
+      "type": "text"
+    },
+    "name": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword"
+        }
+      }
+    },
+    "tags": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword"
+        }
+      }
+    }
+  }
+}
+# reply 
+{
+  "acknowledged": true
+}
+```
+
+* we retrieve the complete mapping to check status
+
+```
+GET /product/default/_mapping
+# reply
+{
+  "product": {
+    "mappings": {
+      "default": {
+        "dynamic": "false",
+        "properties": {
+          "description": {
+            "type": "text"
+          },
+          "in_stock": {
+            "type": "integer"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword"
+              }
+            }
+          },
+          "price": {
+            "type": "integer"
+          },
+          "sold": {
+            "type": "long"
+          },
+          "tags": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### Lecture 44 - Defining Custom Date Formats
+
+* [built-in date formats](https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-date-format.html#built-in-date-formats)
+* [custom date formats](http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html)
+* we will now add a mapping for the created field which is a date.
+
+```
+PUT product/default/_mapping
+{
+  "properties": {
+    "created": {
+      "type": "date",
+      "format": "strict_date_optional_time||epoch_milis"
+    }
+  }
+}
+```
+
+* we spec it a a date type and pass the accepted date format. 
+* strict date means a complete date with leading zeros.
+* optional time means time is not required.
+* || epoch_millis means an alternative timestamp format is accepted. millis epoch is UNIX timnestamp * 1000. no slashes allowed.
+* this format is the implicit one if we do dynamic mapping. muchmore formats available
+* always check the test data for format. change the data or change the format to parse them. our date data have / . we define a custom format `"format": "yyyy/MM/dd HH:mm:ss||yyyy/MM/dd"`
+* we pass the query to mapping API with the custom format and retrieve mapping to verify
+* we are ready to pass in the test data and use all their fields with our now complete map. we use the curl command like before
+
+```
+curl -H "Content-Type: application/json" -XPOST "http://localhost:9200/product/default/_bulk?pretty" --data-binary "@test-data.json"
+```
+* we successfully populate our index with docs
+
+### Lecture 45 - Picking up new fields without dynamic mapping
+
+* we added all fields except from discount field. we want to add this in mapping
+* before that we will try to index a doc with a description and discount(not yet mapped). it is indexed successfully
+
+```
+POST /product/default/2000
+{
+  "description": "Test",
+  "discount": 20
+}
+# reply
+{
+  "_index": "product",
+  "_type": "default",
+  "_id": "2000",
+  "_version": 1,
+  "result": "created",
+  "_shards": {
+    "total": 2,
+    "successful": 1,
+    "failed": 0
+  },
+  "_seq_no": 196,
+  "_primary_term": 1
+}
+```
+
+* next we add the discount proerty to the mapping. its added OK
+
+```
+PUT /product/default/_mapping
+{
+  "properties": {
+    "discount": {
+      "type": "integer"
+    }
+  }
+}
+# reply
+{
+  "acknowledged": true
+}
+```
+
+* we search for the test doc to see it is indexed correctly using the _search API. SUCCESS
+
+```
+GET /product/default/_search
+{
+  "query": {
+    "match": {
+      "description": "Test"
+    }
+  }
+}
+# reply
+{
+  "took": 36,
+  "timed_out": false,
+  "_shards": {
+    "total": 5,
+    "successful": 5,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": 1,
+    "max_score": 8.108471,
+    "hits": [
+      {
+        "_index": "product",
+        "_type": "default",
+        "_id": "2000",
+        "_score": 8.108471,
+        "_source": {
+          "description": "Test",
+          "discount": 20
+        }
+      }
+    ]
+  }
+}
+```
+
+* we will now try to search the test doc using the discount field in our query. It fails to return the doc. this si because we disabled dynamic mapping. so it ignored fields for whose there is no mappings. test doc therefore was store without the discount param then not yet mapped. the values exist under the _source meta field but they were not indexed/searchable
+
+```
+GET /product/default/_search
+{
+  "query": {
+    "term": {
+      "discount": 20
+    }
+  }
+}
+# reply
+{
+  "took": 8,
+  "timed_out": false,
+  "_shards": {
+    "total": 5,
+    "successful": 5,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": 0,
+    "max_score": null,
+    "hits": []
+  }
+}
+```
+
+* one solution is to start over and add mapping before adding the doc. or use an API named *update by query*. this API updates documents, without changing the source. it touches the documens and reindexes them. this is useful to pick up new mappings
+
+```
+POST /product/_update_by_query?conflicts=proceed
+# reply
+{
+  "took": 279,
+  "timed_out": false,
+  "total": 1001,
+  "updated": 1001,
+  "deleted": 0,
+  "batches": 2,
+  "version_conflicts": 0,
+  "noops": 0,
+  "retries": {
+    "bulk": 0,
+    "search": 0
+  },
+  "throttled_millis": 0,
+  "requests_per_second": -1,
+  "throttled_until_millis": 0,
+  "failures": []
+}
+```
+
+* we set conflict=proceed because we dont care. conflict is when a doc is added while we run the query. but if it is changed it will pick up the map so no problem, we ignore it. this query updates ALL doc in the index. 
+* if we rerun the query with the discount we get the doc back. SUCCESS
+* we delete the test doc `DELETE /product/default/2000`
+
+## Section 6 - Analysis & Analyzers
+
+### Lecture 47 - Intro to the analysis process
 
 * 
