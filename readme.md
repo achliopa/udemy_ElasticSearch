@@ -1350,4 +1350,382 @@ POST /product/_update_by_query?conflicts=proceed
   with the standard analyzer there is no character filter. text goes straight to tokenizer. the tokenizer used is one named standard (filters out symbols, split by whitespace)  I'm in the mood for drinking semi-dry red wine! => [I'm, in, the, mood, for, drinking, semi, red, wine]. this array of tokens is sent ot a chain of token filters. first one is standard. it does nothing. just a placeholder for future filters, stub token filter is added but disabled. the only token filter used wihth thes default standard analyzer is the lowercase
   * there s an analyze API to test the results of applying character filters, tokenizers, and token filters as a whole
 
-  ### Lecture 49 - Using the Analyze API
+### Lecture 49 - Using the Analyze API
+
+* we use the analyzer API on the test sentence of the prev lecture. er use the POST _analyze URI pasing a JSON object whre we spec the tokenizer and pass in the text to the analyzer
+
+```
+POST _analyze
+  {
+    "tokenizer": "standard",
+    "text": "I'm in the mood for drinking semi-dry red wine"
+  }
+# reply
+{
+  "tokens": [
+    {
+      "token": "I'm",
+      "start_offset": 0,
+      "end_offset": 3,
+      "type": "<ALPHANUM>",
+      "position": 0
+    },
+    {
+      "token": "in",
+      "start_offset": 4,
+      "end_offset": 6,
+      "type": "<ALPHANUM>",
+      "position": 1
+    },
+...
+    {
+      "token": "red",
+      "start_offset": 38,
+      "end_offset": 41,
+      "type": "<ALPHANUM>",
+      "position": 8
+    },
+    {
+      "token": "wine",
+      "start_offset": 42,
+      "end_offset": 46,
+      "type": "<ALPHANUM>",
+      "position": 9
+    }
+  ]
+}
+```
+
+* now we will apply a tokefilter (lowercase) to the tokens generated. token filters come as an array
+
+``` 
+POST _analyze
+{
+  "filter": ["lowercase"],
+  "text": "I'm in the mood for drinking semi-dry red wine"
+}
+# reply
+{
+  "tokens": [
+    {
+      "token": "I'm",
+      "start_offset": 0,
+      "end_offset": 3,
+      "type": "<ALPHANUM>",
+      "position": 0
+    },
+    {
+      "token": "in",
+      "start_offset": 4,
+      "end_offset": 6,
+      "type": "<ALPHANUM>",
+      "position": 1
+    },
+...
+    {
+      "token": "red",
+      "start_offset": 38,
+      "end_offset": 41,
+      "type": "<ALPHANUM>",
+      "position": 8
+    },
+    {
+      "token": "wine",
+      "start_offset": 42,
+      "end_offset": 46,
+      "type": "<ALPHANUM>",
+      "position": 9
+    }
+  ]
+}
+```
+
+* we see that even when we dont define tokenizer the text was tokenized before the filter was applied. this is because standard tokenizer comes as default. if we want to add a character filter in the JSON obejct we pass "char_filter": []
+* instead of configuring the discrete steps of the analyzer i can pass a predeifined analyzer ans an object param
+
+```
+POST _analyze
+{
+  "analyzer": "standard",
+  "text": "I'm in the mood for drinking semi-dry red wine"
+}
+# result is the same
+```
+
+### Lecture 50 - Understanding the Inverted Index
+
+* now that we have seen how the results of the analysis are produced we will see what happens to the results after being created
+* the results are stored to what is called inverrted index. it purpose is to to store text in a way that allows very fast and efficient full text searches
+* full text queries are performed on the inverted index and on the original text
+* a cluster will have at least one inverted index. there is one inverted index foer each full text field per index
+* an inverted index consists of all the unique terms that appear in any indexed document for the same full text field
+* an inverted index is a map between terms and which docs contain them.
+* terms in inverted index are sorted
+* the search query is split in terms which are mapped to the documents using the inverted index map to find the best match
+* the inverted index contains meta data for internal usage lie num of documents containg each term
+* we can apply stemming and synonims in inv index
+
+### Lecture 51 - Overview of Character Filters
+
+* we will see the available character filters for us to use in our analyzers and what they do. 
+* three built-in character filters available
+  * HTML Strip Character Filter "filter_strip". strips out HTML elements *<strong>* and decodes HTML entities *&amp;*
+  * Mapping Character Filter "mapping": Replaces values bassed on a map of keys and values I broke my leg _sad_ but who cares _happy_ => I broke my leg :-( but who cares :-)
+  * Pattern Replace "pattern_replace": Uses a regular expression to match characters and replaces them with the specified replacement. Capture groups may be used. Pattern: ([a-zA-Z0-9]+)(-?) Replacement: $1 "9x4343-5s-jf4" => "9x43435sjf4"
+
+### Lecture 52 - Overview of Tokenizers
+
+* we will see the tokenizers tha elasticsearch provides by default
+* 3 main groups: 
+  * word oriented tokenizers: typically used for tokenizing full text into individual words
+    * Standard Tokenizer "standard": divides text into terms on word boundaries and removes most symbols. Usually the best choice
+    * Letter Tokenizer "letter": divides text into terms when encountering a character thyat is not a letter. "I'm in funky-buddha" => [I,m,in,funky,buddha]
+    * Lowercase Tokenizer "lowercase": works like the *letter* tokenizer but also lowercases all terms generated
+    * Whitespace tokenizer "whitespace": divides text into terms when encountering whitespace chars "Funky-budda in Bob's house" => [Funky-buddha,in,Bob's,house!]
+    * UAX URL Email Tokenizer "uax_url_email": like the *standard* tokenizer, but treats URLs and email addresses as single tokens "http://localhost as@as.com" => [http://localhost,as@as.com]
+  * Partial word tokenizers: they break up text or words into small fragments. Used for partial word matching
+    * N-Gram Tokenizer "ngram": breaks text into words when encountering certain characters and then emits N-grams of the specified length "Red Wine" => [Re,Red,ed,wi,win,wine,in,ine,ne]. N--gram is like a sliding window that moves accross a word. the N-gram is configurable. here min length is 2 and max 10
+    * Edge N-Gram Tokenizer "edge_ngram": Breaks text into words when encountering certain characters and then emits N-grams of each word beginiing from the start of the word "Red Wine" => [Re,Red,wi,win,wine]. like previous but N-grams always start from first char. Used in autocompletion like Google. not as good as suggestors
+  * Structured Text tokenizers: used for structured text like email addresses, zip codes, identifiers
+    * Keyword Tokenizer "keyword": no-op tokenizer which outputs the exact same text as a single term "I'm in the mood for love" => [I'm in the mood for love]. doesnt do anything. Only useful when we dont want to tokenize (elastic requires one tokenizer for full text fields). or when we want just o apply filters
+    * Pattern Tokenizer "pattern": uses a regular expression to split text into terms when matching a word separator. Alternatively captures matched text as terms "I,like,red,wine!" => [I,like,red,wine!]. commas are uses to separate terms
+    * Path Tokenizer "path_hierarchy": Splits hierarchical values (e.g file system paths) and emits a term for each component of the tree /path/to/dir => [/path,/path/to,/path/to/dir]. dlimiter configurable but defaults is slash
+
+### Lecture 53 - Overview of Token Filters
+
+* [full-list of available token filters](https://www.elastic.co/guide/en/elasticsearch/reference/current/analysis-tokenfilters.html)
+* many avaialble as buil-in . here we mention a few. for the xamples we assume standard tokenizer is applied
+  * Standard Token Filter "standard": doesn't do anything. acts as a placeholder for future versions [I'm,in,the,mood] => [I'm,in,the,mood]
+  * Lowercase Token Filter "lowercase": normalizes terms to lowercase. [I'm,in,Paris] => [i'm,in,paris]
+  * Uppercase Token Filter "uppercase": normalizes terms to Uppercase [I'm,in,Paris] => [I'M,IN,PARIS]
+  * NGram Token Filter "nGram": Emits N-Grams of the specified length based on the provided terms [Red,wine] => [R,Re,e,ed,d,w,wi,i,in,ne,e] default min=1 max=2 ngram
+  * Edge NGram Token Filter "edgeNGram": emits N-grams of each term beginning from the start of the term [Red,wine] => [R,Re,w,wi]
+  * Stop Token Filter "stop": removes stop words [I'm,in,the,forest] => [I'm,forest]
+  * Word Delimiter Token Filter "word_delimiter": splits words into subwords and performs transformations on subword groups [Wi-Fi,PowerShell,Andy's] => [Wi,Fi,Power,Cell,Andy] uses a number of rules enabled and disabled at please
+  * Stemmer Token Filter "stemmer": stems words for the specified language [I'm,in ,the,mood,for,drinking] => [I'm,in ,the,mood,for,drink] stems workd to their base form
+  * Keyword Marker Token Filter "keyword_marker": protects words from being modified by stemmers. Protected terms: [drinking] [I'm,in ,the,mood,for,drinking] => [I'm,in ,the,mood,for,drinking]
+  * Snowball Token Filter "snowball": stems words based on the snowball algorithm, [I'm,in ,the,mood,for,drinking] => [I'm,in ,the,mood,for,drink]
+  * Synonym Token Filter "synonym": Adds or replaces tokens based on a  a synonym configuration file [I,am,very,happy] => [I,am,very,happy/delighted]. we can supply a config file for synoniums. synonyms get injected to the terms
+* Other token filters: Trim,Length. Truncate
+
+### Lecture 54 - Overview of Built-in Analyzers
+
+* [Language Analyzers](https://www.elastic.co/guide/en/elasticsearch/reference/current/analysis-lang-analyzer.html) 
+* [Built-in Analyzers](https://www.elastic.co/guide/en/elasticsearch/reference/current/analysis-analyzers.html)
+* we will have a look at the default analyzers. they are the default orchestrators of the parts we ve seen so far.
+* Standard Analyzer "standard": Divides text into terms using Unicode Text Segmentation (e.g word boundaries), Removes punctuation, lowercases terms, and optioanlly removes stop words "I'm inthe moof for funky-buddha!" => [i'n,in,the,mood,for,funky,buddha]
+* Simple Analyzer "simple": Divides text into terms when encountering a character that is not a letter. Also lowercases all terms "I'm in the mood for Post-Rock" => [i,m,in,the,mood,for,post,rock]
+* Stop Analyzer "stop": like the *simple* analyzer but also removes stop words "I'm in the mood for Post-Rock!" => [i,m,mood,post,rock]
+* Language Analyzers "(english, ...)": language-specific analyzers, e.g for English or Spanish. "I'm in the mood for drinking!" => [i'm,mood,drink] easy to enable stemming, synonyms etc without explicitly defining them. here it has stop token filter, stemmer token filter
+* Keyword Analyzer "keyword": no-op analyzer that returns the input as a single term "I'm in the mood fro drinking!" => [I'm in the mood fro drinking!]
+* Pattern Analyzer "pattern": uses a regular expression to match token separators and splits text into terms where matches occur "I,like,red,wine!" => [I,like,red,wine!] loweracase token filtern and pattern tokenizer an optional stop token filter
+* Whitespace Analyzer "whitespace": Breaks text into terms when encountering a whitespace character "I'm in the high-mood for drinking!" => [I'm,in,the,high-mood,for,drinking!] wrapper of whitespace tokenizer
+
+### Lecture 55 - Configuring Built-In Analyzers and Token Filters
+
+* some analyzers can be configured through parameters
+* we create a new index for testing and configure it in the same time. in its settings we add a custom analyzer and custom token by extending existing ones. we can do the same for tokenizers and char filters
+```
+PUT /existing_analyzer_config
+{
+  "settings": {
+    "analysis": {
+      "analyzer": {
+        "english_stop" : {
+          "type": "standard",
+          "stopwords": "_english_"
+        }
+      },
+      "filter": {
+        "my_stemmer": {
+          "type": "stemmer",
+          "name": "english"
+        }
+      }
+    }
+  }
+}
+# reply
+{
+  "acknowledged": true,
+  "shards_acknowledged": true,
+  "index": "existing_analyzer_config"
+}
+```
+
+* we use the newly created custom analyzers and token filters using the _analyze API
+on a test string
+
+```
+POST /existing_analyzer_config/_analyze
+{
+  "analyzer": "english_stop",
+  "text": "I'm in the mood for drinking semi-dry red wine!"
+}
+# reply
+{
+  "tokens": [
+    {
+      "token": "i'm",
+      "start_offset": 0,
+      "end_offset": 3,
+      "type": "<ALPHANUM>",
+      "position": 0
+    },
+    {
+      "token": "mood",
+      "start_offset": 11,
+      "end_offset": 15,
+      "type": "<ALPHANUM>",
+      "position": 3
+    },
+    {
+      "token": "drinking",
+      "start_offset": 20,
+      "end_offset": 28,
+      "type": "<ALPHANUM>",
+      "position": 5
+    },
+    {
+      "token": "semi",
+      "start_offset": 29,
+      "end_offset": 33,
+      "type": "<ALPHANUM>",
+      "position": 6
+    },
+    {
+      "token": "dry",
+      "start_offset": 34,
+      "end_offset": 37,
+      "type": "<ALPHANUM>",
+      "position": 7
+    },
+    {
+      "token": "red",
+      "start_offset": 38,
+      "end_offset": 41,
+      "type": "<ALPHANUM>",
+      "position": 8
+    },
+    {
+      "token": "wine",
+      "start_offset": 42,
+      "end_offset": 46,
+      "type": "<ALPHANUM>",
+      "position": 9
+    }
+  ]
+}
+```
+
+* or we use the xustom token filter instead (with the standard tokenizer)
+
+```
+POST /existing_analyzer_config/_analyze
+{
+  "tokenizer": "standard",
+  "filter": ["my_stemmer"],
+  "text": "I'm in the mood for drinking semi-dry red wine!"
+}
+# reply
+{
+  "tokens": [
+    {
+      "token": "I'm",
+      "start_offset": 0,
+      "end_offset": 3,
+      "type": "<ALPHANUM>",
+      "position": 0
+    },
+...
+    {
+      "token": "drink",
+      "start_offset": 20,
+      "end_offset": 28,
+      "type": "<ALPHANUM>",
+      "position": 5
+    },
+    {
+      "token": "semi",
+      "start_offset": 29,
+      "end_offset": 33,
+      "type": "<ALPHANUM>",
+      "position": 6
+    },
+    {
+      "token": "dry",
+      "start_offset": 34,
+      "end_offset": 37,
+      "type": "<ALPHANUM>",
+      "position": 7
+    },
+    {
+      "token": "red",
+      "start_offset": 38,
+      "end_offset": 41,
+      "type": "<ALPHANUM>",
+      "position": 8
+    },
+    {
+      "token": "wine",
+      "start_offset": 42,
+      "end_offset": 46,
+      "type": "<ALPHANUM>",
+      "position": 9
+    }
+  ]
+}
+```
+
+### Lecture 56 - Creating Custom Analyzers
+
+* we ve seen how to extend default analyzers and their steps and apply them using the _analyze API. we will now learn how to create them from scratch
+* we use the settings object from previous lecture with the two custom extended analyzer.filter on a new test index, while adding our new custom anal;yzer "my_analyzer" from scratch after the "english_stop" we defined before
+* the type is "custom" and add its parts composed by default parts.
+
+```
+PUT /analyzers_test
+{
+  "settings": {
+    "analysis": {
+      "analyzer": {
+        "english_stop" : {
+          "type": "standard",
+          "stopwords": "_english_"
+        },
+        "my_analyzer": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "char_filter": [
+            "html_strip"
+          ],
+          "filter": [
+            "standard",
+            "lowercase",
+            "trim",
+            "my_stemmer"
+          ]
+        }
+      },
+      "filter": {
+        "my_stemmer": {
+          "type": "stemmer",
+          "name": "english"
+        }
+      }
+    }
+  }
+}
+# reply
+{
+  "acknowledged": true,
+  "shards_acknowledged": true,
+  "index": "analyzers_test"
+}
+```
+
+* we test our newly created analyzer like before on a test string using the _analyze API
+
+```
+
+```
