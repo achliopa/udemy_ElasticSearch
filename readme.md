@@ -1727,5 +1727,226 @@ PUT /analyzers_test
 * we test our newly created analyzer like before on a test string using the _analyze API
 
 ```
+POST /analyzers_test/_analyze
+{
+  "analyzer": "my_analyzer",
+  "text": "I'm in the mood for drinking <span>semi-dry</span> red wine!"
+}
+#reply
+{
+  "tokens": [
+    {
+      "token": "i'm",
+      "start_offset": 0,
+      "end_offset": 3,
+      "type": "<ALPHANUM>",
+      "position": 0
+    },
+    {
+      "token": "in",
+      "start_offset": 4,
+      "end_offset": 6,
+      "type": "<ALPHANUM>",
+      "position": 1
+    },
+    {
+      "token": "the",
+      "start_offset": 7,
+      "end_offset": 10,
+      "type": "<ALPHANUM>",
+      "position": 2
+    },
+    {
+      "token": "mood",
+      "start_offset": 11,
+      "end_offset": 15,
+      "type": "<ALPHANUM>",
+      "position": 3
+    },
+    {
+      "token": "for",
+      "start_offset": 16,
+      "end_offset": 19,
+      "type": "<ALPHANUM>",
+      "position": 4
+    },
+    {
+      "token": "drink",
+      "start_offset": 20,
+      "end_offset": 28,
+      "type": "<ALPHANUM>",
+      "position": 5
+    },
+    {
+      "token": "semi",
+      "start_offset": 35,
+      "end_offset": 39,
+      "type": "<ALPHANUM>",
+      "position": 6
+    },
+    {
+      "token": "dry",
+      "start_offset": 40,
+      "end_offset": 50,
+      "type": "<ALPHANUM>",
+      "position": 7
+    },
+    {
+      "token": "red",
+      "start_offset": 51,
+      "end_offset": 54,
+      "type": "<ALPHANUM>",
+      "position": 8
+    },
+    {
+      "token": "wine",
+      "start_offset": 55,
+      "end_offset": 59,
+      "type": "<ALPHANUM>",
+      "position": 9
+    }
+  ]
+}
+```
+
+### Lecture 57 - Using analyzers in mappings
+
+* we ve seen how to use the _analyze API to apply analyzers on test strings. now we will learn how to add them in field mappings to use them in the actual indexing of our docs
+* it is simple as all it takes is add the anlyzer parameter in our field mapping
+* we use our test index again
 
 ```
+PUT /analyzers_test/default/_mapping
+{
+  "properties": {
+    "description": {
+      "type": "text",
+      "analyzer": "my_analyzer"
+    },
+    "teser": {
+      "type": "text",
+      "analyzer": "standard"
+    }
+  }
+}
+# reply
+{
+  "acknowledged": true
+}
+```
+
+* we will now add documents for testing with the POST command to index
+
+```
+POST /analyzers_test/default/1
+{
+  "description": "drinking",
+  "teaser": "drinking"
+}
+#reply
+{
+  "_index": "analyzers_test",
+  "_type": "default",
+  "_id": "1",
+  "_version": 1,
+  "result": "created",
+  "_shards": {
+    "total": 2,
+    "successful": 1,
+    "failed": 0
+  },
+  "_seq_no": 0,
+  "_primary_term": 1
+}
+```
+
+* we will now query the data based on "drinking" term in "teaser" filed using the _search API. Success I get a result
+
+```
+GET /analyzers_test/default/_search
+{
+  "query": {
+    "term": {
+      "teaser": {
+        "value": "drinking"
+      }
+    }
+  }
+}
+# reply
+{
+  "took": 2,
+  "timed_out": false,
+  "_shards": {
+    "total": 5,
+    "successful": 5,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": 1,
+    "max_score": 0.2876821,
+    "hits": [
+      {
+        "_index": "analyzers_test",
+        "_type": "default",
+        "_id": "1",
+        "_score": 0.2876821,
+        "_source": {
+          "description": "drinking",
+          "teaser": "drinking"
+        }
+      }
+    ]
+  }
+}
+```
+
+* if i search the same term in the description field i get NO results as drinking was stemmed to drink from the applyed filter.
+
+### Lecture 58 - Adding analyzer definitions to existing indices
+
+* up to now we added analyzers to new indices . now we will learn how to aadd them to existing indices. analyzers term applies to its parts (filters,tokenizers etc)
+* we need to CLOSE the index before adding analyzers and OPEN it again afterwards. this is a special case
+* Closing an index means it will block read/write operations. we do this with _close API `POST /<index>/_close`
+
+```
+POST /analyzers_test/_close
+# reply
+{
+  "acknowledged": true
+}
+```
+
+* we add the analyzer using the _settings API (similar to when we added analyzers at index creation)
+
+```
+PUT /analyzers_test/_settings
+{
+  "analysis": {
+    "analyzer": {
+      "french_stop": {
+        "type": "standard",
+        "stopwords": "_french"
+      }
+    }
+  }
+}
+# reply
+{
+  "acknowledged": true
+}
+```
+
+* we reopen the index with the _ open API `POST /analyzers_test/_open`
+* note that we didnt have to do this if we were using the standard analyzers. also we cannot add the  newly added anlyzer to existing mappings. we would have to recreate the index then. for new fields this is not an issue
+
+### Lecture 59 - A word onm Stop Words
+
+* it used to be common practice to remove stop words but not anymore. the relevance algo of elasticsearch is eveloved to include stopwords so it is recommended not to remove them
+
+## Section 7 - Introduction to Searching
+
+### Lecture 61 - Search Methods
+
+* 
