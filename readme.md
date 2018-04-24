@@ -2274,8 +2274,224 @@ GET /product/default/_search
 
 ### Lecture 69 - Introduction to Term Level Queries
 
-* used to query structured data like dates and nums, status checks, return exact matches.
+* used to query structured data like dates and nums, status checks or Enums or keywords, return exact matches.
 
 ### Lecture 70 - Searching for a Term
+
+* we will look for all docs that have is_active == true
+
+```
+GET /product/default/_search
+{
+  "query": {
+    "term": {
+      "is_active": true
+    }
+  }
+}
+# OR another syntax
+GET /product/default/_search
+{
+  "query": {
+    "term": {
+      "is_active": {
+        "value": true
+      }
+    }
+  }
+}
+# i get 487 hits
+```
+
+### Lecture 71 - Searching for Multiple Terms
+
+* instead of providing 1 val we provide multiple ones, query returns if it matches any of the provided vals (they are ORed) also instead of "term" wei use "terms"
+
+```
+GET /product/default/_search
+{
+  "query": {
+    "terms": {
+      "tags.keyword": [
+        "Soup",
+        "Cake"
+      ]
+    }
+  }
+}
+```
+
+### Lecture 72 - Retrieving Docs based on IDs
+
+* same like specing an array of terms we can spec an array of IDs (if e.g we store IDs in  DB or if we use same IDs with a DB). instead of "terms" we use "ids"
+
+```
+GET /product/default/_search
+{
+  "query": {
+    "ids": {
+      "values": [1,2,3]
+    }
+  }
+}
+# we get 3 hits
+```
+
+### Lecture 73 - Matching Documents w/ Range Vals
+
+* say we want to find the products that are nearly exhasted. "in_stock" between 1 and 5. instead of "term" we use "range" then the "FIELD" and a set of values limiting the range with "gt" "lt"
+
+```
+GET /product/default/_search
+{
+  "query": {
+    "range": {
+      "in_stock": {
+        "gte": 1,
+        "lte": 5
+      }
+    }
+  }
+}
+# result 96 hits
+```
+
+* we can use range for dates
+
+```
+GET /product/default/_search
+{
+  "query": {
+    "range": {
+      "created": {
+        "gte": "2010/01/01",
+        "lte": "2010/12/31"
+      }
+    }
+  }
+}
+# result 57 hits
+```
+
+* we can apply format in date range query
+
+```
+GET /product/default/_search
+{
+  "query": {
+    "range": {
+      "created": {
+        "gte": "01-01-2010",
+        "lte": "31-12-2010",
+        "format": "dd-MM-yyyy"
+      }
+    }
+  }
+}
+```
+
+### Lecture 74 - Working with Relative dates (date math)
+
+* [date and time units](https://www.elastic.co/guide/en/elasticsearch/reference/current/common-options.html#date-math)
+* date math or relative dates can be applied in other areas of elasticsearch
+* the relative date string starts with the anchor date (now or specific date) next we use the pipe symbol || and then the operation on the anchor date e/g -1y,+2m,-4w.
+* the below example returns docs with created date after 1/1/2009 we can stack multiple operands. -1w-1d. 
+```
+GET /product/default/_search
+{
+  "query": {
+    "range": {
+      "created": {
+        "gte": "2010/01/01||-1y"
+      }
+    }
+  }
+}
+# result 57 hits
+```
+
+* we can round values in the relative date string with /. we can round for day moth etc. rounding direction for gt and lte is up and for gte and lt is down
+* rounding can be placed before or after math depending when we want to round off ` "gte": "2010/01/01||-1y/M"` ` "gte": "2010/01/01||/M-1y"`
+* when we set the anchor to now we dont need the 2 pipes. `"gte": "now/M-1y"`
+
+### Lecture 75 - Matching documents with non-null values
+
+* now we will learn how to search for fields that have at least on non-null val at a given field
+* a non-null value is a value that is not null (?!?!)
+* empty srting matches the exist query an empty array not
+* to do this type of query we use the "exists" param
+
+```
+GET /product/default/_search
+{
+  "query": {
+    "exists": {
+      "field": "tags"
+    }
+  }
+}
+# result 316 hits
+```
+
+* the above query searches for docs that have at least one tag keyword (non empty array)
+* elastic uses the "_field" metafield to search for existence. if we specify a null val at map the doc will match a exists query.
+
+### Lecture 76 - Matching Based on Prefixes
+
+* we can search for terms that begin with a certain prefix.
+* the query type that allows us to do that is called "prefix"
+
+```
+GET /product/default/_search
+{
+  "query": {
+    "prefix": {
+      "tags.keyword": "Vege"
+    }
+  }
+}
+# result 34 hits most of which "Vegetable"
+```
+
+### Lecture 77 - Searching with Wildcards
+
+* elasticsearch supports a variety of dynamic queries one of which is the wildcard query. this query allows us to use wildcards in a query * and ?. * matches any char sequence including no chars. ? matches any single char
+
+```
+GET /product/default/_search
+{
+  "query": {
+    "wildcard": {
+      "tags.keyword": "Veg*abl?"
+    }
+  }
+}
+# result 34 hits (Vegetable)
+```
+
+* wildcard queries are slow especially if wildcards are put in the beginning of the query term
+
+### Lecture 78 - Searching with RegEx
+
+* same drill. we use "regexp" query type and use regex in our query term
+
+```
+GET /product/default/_search
+{
+  "query": {
+    "regexp": {
+      "tags.keyword": "Veget[a-zA-Z]+ble"
+    }
+  }
+}
+# result 34 hits
+```
+
+* elastic uses lucene regex engine with is not 100% compatible. regex is applied to the terms in the field and not the complete field
+* regex query performance depends on the pattern used (limit use of wildcard pattterns)
+
+## Section 9 - Full Text Queries
+
+### Lecture 79 - Introduction to full-text queries
 
 * 
