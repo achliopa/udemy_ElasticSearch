@@ -1949,4 +1949,333 @@ PUT /analyzers_test/_settings
 
 ### Lecture 61 - Search Methods
 
+* the first method is to use the QUERY DSL (domain spec lang) utilizing the _search API on the index `GET /<index>/<type>/_search` followed by a JSON query
+
+```
+GET /<index>/<type>/_search
+{
+  "query": {
+    "<query type>": {
+      "<field>": {
+        "value": "<some value>"
+      }
+    }
+  }
+}
+```
+* we can shorten the query by ommiting the "value" term `"<field>": "<some value>"`
+* another way is using the request URI embedding the search query in the search URI `GET /<index>/<type>/_search?q=<field>:<search val>` . these are refered to as query string queries
+* Query DSL supports query string syntax
+
+```
+GET /<index>/<type>/_search
+{
+  "query": {
+    "query_string": {
+      "query":  "<>field>: <searchvalue>"
+    }
+  }
+}
+```
+
+### Lecture 62 - Searching with the Request URI
+
+* [Query String Doc](https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html)
+
+```
+GET /product/default/_search?q=*
+GET /product/default/_search?q=name:lobster
+GET /product/default/_search?q=tags:Meat
+```
+
+* = is followed by search query, * means all, key value pairs. field:searchval means search by value
+* results are sorted by relevance
+* we can chain search queries using boolean operators
+
+```
+GET /product/default/_search?q=tags:Meat AND name:Tuna
+```
+
+* in cURL spaces must be substituted with %20
+
+### Lecture 63 - Introducting the Query DSL
+
+* we spec the query in an JSON object istead of Request URI. there are 2 types of queries
+  * Leaf Queries e.g category = 'Fruit'
+  * Compound Queries e.g category = 'Fruit' OR category = 'Vegetable'. vompound queries consiste of multiple leaf queries or compound queries (recursive by nature)
+
+  ```
+  GET /product/default/_search
+{
+  "query": {
+    "match_all": {}
+  }
+}
+  ```
+
+  * "match_all": {} means bring all 
+
+### Lecture 64 - Understanding Query Results
+
+```
+{
+  "took": 1,
+  "timed_out": false,
+  "_shards": {
+    "total": 5,
+    "successful": 5,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": 1000,
+    "max_score": 1,
+    "hits": [
+      {
+        "_index": "product",
+        "_type": "default",
+        "_id": "14",
+        "_score": 1,
+        "_source": {
+          "name": "Nori Sea Weed - Gold Label",
+          "price": 177,
+          "in_stock": 21,
+          "sold": 411,
+          "tags": [],
+          "description": "Nulla ac enim. In tempor, turpis nec euismod scelerisque, quam turpis adipiscing lorem, vitae mattis nibh ligula nec sem. Duis aliquam convallis nunc. Proin at turpis a pede posuere nonummy. Integer non velit. Donec diam neque, vestibulum eget, vulputate ut, ultrices vel, augue. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Donec pharetra, magna vestibulum aliquet ultrices, erat tortor sollicitudin mi, sit amet lobortis sapien sapien non mi. Integer ac neque. Duis bibendum.",
+          "is_active": true,
+          "created": "2007/02/16"
+        }
+      },
+
+      ......
+    ]
+```
+
+* "took": counts the miliseconds it took to execute
+* "timed_out": boolean if query timed out
+* "_shards": total number of shards that were searched, how many successful and how many with error
+* "hits": are the search results
+* "max score": is the maximum score achieved
+* "hits": [] contains the actual results (matched documents). by default it brings 10 documents per time (configurable)
+* the matched document object is the document. it contains
+  * the index it belongs, its type, its id, the score it achieved an the _source object with the fields
+* hits are sorted per score
+
+
+
+* ### Lecture 65 - Understanding Relevance Scores
+
+* elastic returns how well a result matches. this is unique feat in contrast with DBs. Find docs matching the query + How well do the docs match
+* relevance score is a float 0.0- 1.0. the algorithm is customizable
+* elastic used TF/IDF (Term Frequency/Inverse Term Frequence) algorithm
+* now it uses Okapi BM25 algorithm
+* Term Frequency (TF): How many times does the term appear in teh filed for a given document
+* Inverse Document Frequency (IDF): How often the term appear within the index (across all documents). if it is  a common word e.g stop word) then it has a high IDF score so lower weight (smaller fraction) so not so relevant
+* Field-length norm: How long is the field. the smaller the more significant the term (fewer terms)
+* the above 3 params are calculated and stored at index time.
+* Okapi BM25 algo is better at handling stop words. in the past it was common to remove stop words. now not so common because BM25 is good at it. the relevance of stopwords is suppressed by BM25 but not ignored. this is done by NonLinear Term Frequency Saturation. in BM25() tf() is suppressed while in TF/IDF it increases in a 1- e^x rate. this is done as BM25 applies a limit on how much a term can be boosted by the tf()
+* In BM25 Field-length norm also improves each field is treated separately
+* BM25 is configurable with 2 params
+* its possible to alter the scores. also possible to alter how scores are calculated (advanced stuff)
+* we can get an insight on the scoring with the explain param in the JSON query object and get the explanation field in the reply with insight
+
+```
+GET /product/default/_search
+{
+  "explain": true,
+  "query": {
+    "term": {
+      "name": "lobster"
+    }
+  }
+}
+# reply
+...
+"_explanation": {
+          "value": 5.6265006,
+          "description": "weight(name:lobster in 1) [PerFieldSimilarity], result of:",
+          "details": [
+            {
+              "value": 5.6265006,
+              "description": "score(doc=1,freq=1.0 = termFreq=1.0\n), product of:",
+              "details": [
+                {
+                  "value": 4.8777385,
+                  "description": "idf, computed as log(1 + (docCount - docFreq + 0.5) / (docFreq + 0.5)) from:",
+                  "details": [
+                    {
+                      "value": 1,
+                      "description": "docFreq",
+                      "details": []
+                    },
+                    {
+                      "value": 196,
+                      "description": "docCount",
+                      "details": []
+                    }
+                  ]
+                },
+                {
+                  "value": 1.153506,
+                  "description": "tfNorm, computed as (freq * (k1 + 1)) / (freq + k1 * (1 - b + b * fieldLength / avgFieldLength)) from:",
+                  "details": [
+                    {
+                      "value": 1,
+                      "description": "termFreq=1.0",
+                      "details": []
+                    },
+                    {
+                      "value": 1.2,
+                      "description": "parameter k1",
+                      "details": []
+                    },
+                    {
+                      "value": 0.75,
+                      "description": "parameter b",
+                      "details": []
+                    },
+                    {
+                      "value": 2.9642856,
+                      "description": "avgFieldLength",
+                      "details": []
+                    },
+                    {
+                      "value": 2,
+                      "description": "fieldLength",
+                      "details": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "_shard": "[product][2]",
+        "_node": "MtGZ0aFdRtakBTIApOpKiA",
+        "_index": "product",
+        "_type": "default",
+        "_id": "55",
+        "_score": 4.4460244,
+        "_source": {
+          "name": "Lobster - Baby Boiled",
+          "price": 134,
+          "in_stock": 41,
+          "sold": 207,
+          "tags": [
+            "Meat"
+          ],
+          "description": "Nulla tellus. In sagittis dui vel nisl. Duis ac nibh. Fusce lacus purus, aliquet at, feugiat non, pretium quis, lectus. Suspendisse potenti. In eleifend quam a odio.",
+          "is_active": false,
+          "created": "2016/01/19"
+        },
+...
+```
+
+* the value of the term apearing in docs refers to the shard not the complete index
+
+### Lecture 66 - Debugging Unexpected Search Reults
+
+* at some point we will not be able to find a document with our query. it is important to know how to search why the result was not returned. elasticsearch provides the _explain API for this reason. the syntax is
+
+```
+GET /<index>/<type>/<id>/_explain
+{
+  "query": {
+    "term": {
+      "FIELD": {
+        "value": "VALUE"
+      }
+    }
+  }
+}
+```
+
+* example
+
+```
+GET /product/default/1/_explain
+{
+  "query": {
+    "term": {
+      "name": "lobster"
+    }
+  }
+}
+# reply
+{
+  "_index": "product",
+  "_type": "default",
+  "_id": "1",
+  "matched": false,
+  "explanation": {
+    "value": 0,
+    "description": "no matching term",
+    "details": []
+  }
+}
+```
+
+* this si a good whey to debug if we want to know why a given doc didnt match the query
+
+### Lecture 67 - Query Contexts
+
+* a query can be executed in 2 contexts. query context and filter context.
+* when we query in the query context we ask "how well documents match the query"
+* in filter context we ask if documents match. doc that dont match wont be returned. in filter context no relevance scores are calculated. its a boolean evaluation. filetring is applied on dates, ranges,status etx. not full text
+
+### Lecture 68 - Full-Text Queries vs Term Level Queries
+
+* we can use 2 types of queries when searching for data. term level and dull -text
+
+* we run a term query with the same term once capitalized and once lowercase
+
+```
+GET /product/default/_search
+{
+  "query": {
+    "term": {
+      "name": "lobster"
+    }
+  }
+}
+
+GET /product/default/_search
+{
+  "query": {
+    "term": {
+      "name": "Lobster"
+    }
+  }
+}
+```
+
+* in the first i get 5 hits all with name containing "Lobster" capitalized. the second query gets 0 hits evenif we search with capitalized Lobster
+* if i run a full text query with the capitalized version of lobster i get 5 hits
+
+```
+GET /product/default/_search
+{
+  "query": {
+    "match": {
+      "name": "Lobster"
+    }
+  }
+}
+```
+
+* term level queries search for ecact values (terms) in the inverted index where we now by default terms are lowercased
+* in full text query the query passes from analysis process like doc itself (using the same analyzer used for the field) so is itself also lowercase before hitting the inverted index
+* term level queries are better for numbers dates etc. not sentences
+
+## Section 8 - Term Level Queries
+
+### Lecture 69 - Introduction to Term Level Queries
+
+* used to query structured data like dates and nums, status checks, return exact matches.
+
+### Lecture 70 - Searching for a Term
+
 * 
