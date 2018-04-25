@@ -2494,4 +2494,404 @@ GET /product/default/_search
 
 ### Lecture 79 - Introduction to full-text queries
 
+* full-text queries are used for blocked posts, articles etc
+* for this section he uses new test data that he imports in recipe index using dynamic mapping
+* we import them ourself with curl
+
+```
+curl -H "Content-Type: application/json" -XPOST "http://localhost:9200/recipe/default/_bulk?pretty" --data-binary "@test-data2.json"
+```
+
+* we check the mapping created with `GET /recipe/default/_mapping`
+* we get a sample doc with 
+
+```
+GET /recipe/default/1
+# reply
+{
+  "_index": "recipe",
+  "_type": "default",
+  "_id": "1",
+  "_version": 1,
+  "found": true,
+  "_source": {
+    "title": "Fast and Easy Pasta With Blistered Cherry Tomato Sauce",
+    "description": "Cherry tomatoes are almost always sweeter, riper, and higher in pectin than larger tomatoes at the supermarket. All of these factors mean that cherry tomatoes are fantastic for making a rich, thick, flavorful sauce. Even better: It takes only four ingredients and about 10 minutes, start to finish—less time than it takes to cook the pasta you're gonna serve it with.",
+    "preparation_time_minutes": 12,
+    "servings": {
+      "min": 4,
+      "max": 6
+    },
+    "steps": [
+      "Place pasta in a large skillet or sauté pan and cover with water and a big pinch of salt. Bring to a boil over high heat, stirring occasionally. Boil until just shy of al dente, about 1 minute less than the package instructions recommend.",
+      "Meanwhile, heat garlic and 4 tablespoons (60ml) olive oil in a 12-inch skillet over medium heat, stirring frequently, until garlic is softened but not browned, about 3 minutes. Add tomatoes and cook, stirring, until tomatoes begin to burst. You can help them along by pressing on them with the back of a wooden spoon as they soften.",
+      "Continue to cook until sauce is rich and creamy, about 5 minutes longer. Stir in basil and season to taste with salt and pepper.",
+      "When pasta is cooked, drain, reserving 1 cup of pasta water. Add pasta to sauce and increase heat to medium-high. Cook, stirring and tossing constantly and adding reserved pasta water as necessary to adjust consistency to a nice, creamy flow. Remove from heat, stir in remaining 2 tablespoons (30ml) olive oil, and grate in a generous shower of Parmesan cheese. Serve immediately, passing extra Parmesan at the table."
+    ],
+    "ingredients": [
+      {
+        "name": "Dry pasta",
+        "quantity": "450g"
+      },
+      {
+        "name": "Kosher salt"
+      },
+      {
+        "name": "Cloves garlic",
+        "quantity": "4"
+      },
+      {
+        "name": "Extra-virgin olive oil",
+        "quantity": "90ml"
+      },
+      {
+        "name": "Cherry tomatoes",
+        "quantity": "750g"
+      },
+      {
+        "name": "Fresh basil leaves",
+        "quantity": "30g"
+      },
+      {
+        "name": "Freshly ground black pepper"
+      },
+      {
+        "name": "Parmesan cheese"
+      }
+    ],
+    "created": "2017/03/29",
+    "ratings": [
+      4.5,
+      5,
+      3,
+      4.5
+    ]
+  }
+}
+```
+
+### Lecture 80 - Flexible Matching with the Match Query
+
+* better matches text fields and human writen queries
+
+```
+GET /recipe/default/_search
+{
+  "query": {
+    "match": {
+      "title": "recipes with pasta or spagetti"
+    }
+  }
+}
+# results are sorted by relevance score 16 hits
+
+  "took": 8,
+  "timed_out": false,
+  "_shards": {
+    "total": 5,
+    "successful": 5,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": 16,
+    "max_score": 1.7715604,
+    "hits": [
+      {
+        "_index": "recipe",
+        "_type": "default",
+        "_id": "2",
+        "_score": 1.7715604,
+        "_source": {
+          "title": "Pasta With Butternut Squash and Sage Brown Butter",
+          "description": "Brown butter-based pasta sauces are some of the simplest things around. They're emulsions made with a flavorful fat and pasta cooking water that coats the pasta in a thin, creamy sheen of flavor. Throw in some sautéed squash and some sage and you've got yourself a great 30-minute meal. It's a classic fall and winter dish that can be made right on the stovetop.",
+          "preparation_time_minutes": 30,
+          "servings": {
+            "min": 4,
+            "max": 6
+          },
+          "steps": [
+            "Heat olive oil in a large stainless steel or cast-iron skillet over high heat until very lightly smoking. Immediately add squash, season with salt and pepper, and cook, stirring and tossing occasionally, until well-browned and squash is tender, about 5 minutes. Add butter and shallots and continue cooking, stirring frequently, until butter is lightly browned and smells nutty, about 1 minute longer. Add sage and stir to combine (sage should crackle and let off a great aroma). Remove from heat and stir in lemon juice. Set aside.",
+            "In a medium saucepan, combine pasta with enough room temperature or hot water to cover by about 2 inches. Season with salt. Set over high heat and bring to a boil while stirring frequently. Cook, stirring frequently, until pasta is just shy of al dente, about 2 minutes less than the package directions. Drain pasta, reserving a couple cups of the starchy cooking liquid.",
+            "Add pasta to skillet with squash along with a splash of pasta water. Bring to a simmer over high heat and cook until the pasta is perfectly al dente, stirring and tossing constantly and adding a splash of water as needed to keep the sauce loose and shiny. Off heat, stir in Parmigiano-Reggiano. Adjust seasoning with salt and pepper and texture with more pasta water as needed. Serve immediately, topped with more cheese at the table."
+          ],
+          "ingredients": [
+            {
+              "name": "extra-virgin olive oil",
+              "quantity": "30ml"
+            },
+            {
+              "name": "Butternut squash",
+              "quantity": "450g"
+            },
+            {
+              "name": "Kosher salt"
+            },
+            {
+              "name": "Freshly ground black pepper"
+            },
+            {
+              "name": "Unsalted butter",
+              "quantity": "30g"
+            },
+            {
+              "name": "Shallot",
+              "quantity": "1"
+            },
+            {
+              "name": "Fresh sage leaves",
+              "quantity": "15g"
+            },
+            {
+              "name": "Lemon juice",
+              "quantity": "15ml"
+            },
+            {
+              "name": "Penne",
+              "quantity": "450g"
+            },
+            {
+              "name": "Grated fresh Parmigiano-Reggiano cheese",
+              "quantity": "30g"
+            }
+          ],
+          "created": "2014/12/19",
+          "ratings": [
+            3,
+            4,
+            3.5,
+            2
+          ]
+        }
+      },
+    ............
+```
+
+* our best match does not contain the term spagetti. thi is because analyde result terms are ORed
+* we ususally leave the boolean operator as is but we can change it
+
+```
+GET /recipe/default/_search
+{
+  "query": {
+    "match": {
+      "title": {
+        "query": "Recipes with pasta or spagηetti",
+        "operator": "and"
+      }
+    }
+  }
+}
+# results 0 hits (this is a strickt query)
+```
+
+* order of terms in our query doesnt matter
+
+### Lecture 81 - Matching Phrases
+
+* if i want to match a phrase aka words in a specific order i use "match_phrase" query type instead of "match"
+
+```
+GET /recipe/default/_search
+{
+  "query": {
+    "match_phrase": {
+      "title": "spaghetti puttanesca"
+    }
+  }
+}
+# 1 hit with title "Spaghetti Puttanesca (Pasta or Spaghetti With Capers, Olives, and Anchovies)"
+```
+* if i swap the order of workds in my phrase i get 0 hits. order matters in phrase
+
+### Lecture 82 - Searching Multiple Fields
+
+* [multi match fields](https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-multi-match-query.html#multi-match-types)
+* is easy using a query type "multi_match". the syntax is an objecct with a query string to be searchin in multiple fields (specsd in an array). it is like match searching in both fields. the highest relevance score between both fields is used.  so if one field contain both terms and the other none scores higher that if each term appears in each fields. this is paramtertical
+
+```
+GET /recipe/default/_search
+{
+  "query": {
+    "multi_match": {
+      "query": "pasta",
+      "fields": ["title","description"]
+    }
+  }
+}
+```
+
+## Section 10 - Adding Boolean Logic to Queries (Compound Queries)
+
+### Lecture 83 - Intro to Compound Queries
+
+* bollean/compound queries wrap other queries (leaf queries) to construct more complex ones
+
+### Lecture 84 - Queying w/ Boolean Logic
+
+* a query can be run in a query or filter context. query = relevance, sorted results. filter = bollean logic yes or no
+* we use context, in its object we use "bool" query type, in its object we use the operand in our case AND named "must" an in it an array of the individual queres. these are specd by their type and object. e.g match or range
+
+```
+GET /recipe/default/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "ingredients.name": "parmesan"
+          }
+        },
+        {
+          "range": {
+            "preparation_time_minutes": {
+              "lte": 15
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+# results in 3 hits
+```
+
+* relevance scores are calced for each one and then combined, using query context for a range query is overkill as there is match or no match. elastic sets score 1 in range, but filter is faster. we refactor the query. see that range moces out of the must array  into a sepaerate object and is wrapped in a filter context. result is the same
+
+```
+GET /recipe/default/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "ingredients.name": "parmesan"
+          }
+        }
+      ],
+      "filter": {
+        "range": {
+          "preparation_time_minutes": {
+            "lte": 15
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+* i can cascade multiple bollean operations in my complex boll query. i use "must_not" aka NAND as an array passing unwanted match queries to excluse
+* i add one more operand the "should" caluse with its query array. should is more relaxed than must. it enhances the results but do not confine them (us e the score of this query to score higher but it do not deduct score if not found)
+* there is also minimu should which ake more strict the should clause
+
+### Lecture 85 - Debugging bool queries with named queries
+
+* we can use the _explain API we saw before to debug complex queries. to use it  we need to name our individual queries using the "_name" param to THE QUERIES in the compound
+
+```
+GET /recipe/default/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "ingredients.name": {
+              "query": "parmesan",
+              "_name": "parmesan_must"
+            }
+          }
+        }
+      ],
+      "must_not": [
+        {
+          "match": {
+            "ingredients.name": {
+              "query": "tuna",
+              "_name": "tuna_must_not"
+            }
+          }
+        }
+      ],
+      "should": [
+        {
+          "match": {
+            "ingredients.name": {
+              "query": "parsley",
+              "_name": "parsley_should"
+            }
+          }
+        }
+      ], 
+      "filter": {
+        "range": {
+          "preparation_time_minutes": {
+            "lte": 15,
+            "_name": "range_filter"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+* in the results for each doc retrieved i have the matched queries array for the queries that matched for this doc
+
+### Lecture 86 - How the "match" Query Works
+
+* match query by default uses the or operand internaly for the terms produced by the string we pass. this can be chaned to and as we ve seen. so internally it is a compound query, doing this as part of the analysis
+
+```
+GET /recipe/default/_search
+{
+  "query": {
+    "match": {
+      "title": "pasta carbonara"
+    }
+  }
+}
+```
+* the above full text match query is a bool query with OR on the 2 terms produced by the phrase. the clauses it uses are the "should" of "term" queries. it is equivalent to the following one
+
+```
+GET /recipe/default/_search
+{
+  "query": {
+    "bool": {
+      "should": [
+        {
+          "term": {
+            "title": {
+              "value": "pasta"
+            }
+          }
+        },
+        {
+          "term": {
+            "title": {
+              "value": "carbonara"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+* if i use the "and" operator is equivalent to the "must" query type
+* match query is analyzed but term query not. so what about capitalization and other default filters (the terms we used were the wequivalent of the analyzer products as they appear in the inverted index). if we capitalize the terms in the term queries  there no equality with the match query
+
+## Section 11 - Joining Queries
+
+### Lecture 87 - Intro to the Section
+
+* [Join Data Type](https://www.elastic.co/guide/en/elasticsearch/reference/master/parent-join.html)
+
+### Lecture 88 - Querying Nested Objects
+
 * 
