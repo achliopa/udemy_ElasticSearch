@@ -3262,4 +3262,554 @@ GET /recipe/default/_search
 
 ### Lecture 97 - Intro to Aggregations
 
-* 
+* agreggations are more powerfull than DB
+* say we have an index of orders with fields product and amount sold per order. 
+* we can aggregate the total amount of porduct A units sold in all orders
+* in this section we work with order index. we populate it with test data.
+
+```
+curl -H "Content-Type: application/json" -XPOST "http://localhost:9200/order/default/_bulk?pretty" --data-binary "@orders-bulk.json"
+```
+
+* the course has order doc lines as nested object. we dont. it has to do withdefault mapping. maybe we need to do explicit mapping insted, we need to enter "type": "nested" in lines
+
+### Lecture 98 - Metric Aggregations
+
+* [all metric aggregations](https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-metrics.html)
+* Single Value & Multi-Value Numeric Metric Aggregations
+* sum aggregations sumps up thenumbers from fields in retreived docs from query
+
+```
+GET /order/default/_search
+{
+  "size": 0,
+  "aggs": {
+    "total_sales": {
+      "sum": {
+        "field": "total_amount"
+      }
+    }
+  }
+}
+# result
+{
+  "took": 43,
+  "timed_out": false,
+  "_shards": {
+    "total": 5,
+    "successful": 5,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": 1000,
+    "max_score": 0,
+    "hits": []
+  },
+  "aggregations": {
+    "total_sales": {
+      "value": 109209.60997009277
+    }
+  }
+}
+```
+
+* what we did is we run a global query in the JSON body se speced size=0 (w dont care to get back the docs) and an aggregations "aggss" object where we set the query field name we want to use for the results. the operation ("sum" = add) and the doc field which values we want to add
+* what we get back is a query results with "agggregations" property wehre we can find the result with the name we speced in the query body
+* we can apply other operands "avg" "min" "max"
+* if we want to count the distinc values of a field in the retrieved docs we use the "cardinality" aggrgation type. with that we can count the disctinct slasemen ids in all orders. this gives back aproximates as accurate results consume many resources
+* the "value_count" aggregation type counts all the values of the field uses in an aggregation (it should be equal to total_hits for non-null fields)
+* all the above were single-value aggregations
+* a lulti-val is "stats" which calculates amultitude of aggregations
+
+```
+GET /order/default/_search
+{
+  "size": 0,
+  "aggs": {
+    "amount_stats": {
+      "stats": {
+        "field": "total_amount"
+      }
+    }
+  }
+}
+# reply
+..........
+"aggregations": {
+    "amount_stats": {
+      "count": 1000,
+      "min": 10.270000457763672,
+      "max": 281.7699890136719,
+      "avg": 109.20960997009277,
+      "sum": 109209.60997009277
+    }
+  }
+```
+
+### Lecture 99 - Bucket Aggregations
+
+* bucket aggregations create buckets of documents, buckets have criteria to determine if a doc will be contained in them
+* the "terms" aggregation creates a bucket for each unique value (e.g group orders depending on the value of status field)
+
+```
+GET /order/default/_search
+{
+  "size": 0,
+  "aggs": {
+    "status_terms": {
+      "terms": {
+        "field": "status",
+        "missing": "N/A",
+        "order": {
+          "_term": "asc"
+        }
+      }
+    }
+  }
+}
+```
+
+* this query results in aggregations contains a bucket list with buckets weach one has a key (status distinct term) and the doc count
+* elastic ueses the top terms for buckets (size?) and the rest are noncategorized so the doc count of uncategorized docs is set in theother doc counter
+* we can add a "missing" param with a name for a bucket that will contain docs with no value
+* we can set a "min_doc_count" param with the min num of docs a bucket must have to be present in the bucket list
+* calculate doc counts are approximate
+* we canset an order int he bucket list
+
+### Lecture 100 - Document counts are approximate
+
+* the reson that document counts are approximate is due to the distributed nature of elasticsearch cluster. an index is distributed in multiple shards. 
+* in term aggregation. master node prompts others for their top unique terms. master node tkes the results and calculates the sums. it might be that terms are not evenly distributed accross shards
+* the problem is bigger when size param is low. default size is 10
+* if all index is in one shard the results are acuratet
+* "doc_count_error_upper_bound" gives the error margin
+
+### Lecture 101 - Nested Aggregations
+
+* Bucket aggregations can have nested aggregations (sub aggregations)
+* we use the "aggs" key in the buckets. backets are actually sub indexes so we can apply aggregations in them
+* this is recursive. we can have bucket aggregations in bucket aggregations and so one.
+
+```
+GET /order/default/_search
+{
+  "size": 0,
+  "aggs": {
+    "status_terms": {
+      "terms": {
+        "field": "status"
+      },
+      "aggs": {
+        "status_stats": {
+          "stats": {
+            "field": "total_amount"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+* the above creates a stat aggregation in each bucket. the numbers are relevant to the bucket they are contained
+* metric aggregations cannot have sub aggregations
+
+### Lecture 102 - Filtering out Documents
+
+* the document which the aggregation uses depends on the context the aggregation is defined
+* we can filter the docs on which the aggregation is applied regardles of the parent query using a filter
+* a filter uses a query clause (term query or match query)
+
+```
+GET /order/default/_search
+{
+  "size": 0,
+  "aggs": {
+    "low_value": {
+      "filter": {
+        "range": {
+          "total_amount": {
+            "lte": 50
+          }
+        }
+      },
+      "aggs": {
+        "avg_amount": {
+          "avg": {
+            "field": "total_amount"
+          }
+        }
+      }
+    }
+  }
+}
+# results
+{
+  "took": 7,
+  "timed_out": false,
+  "_shards": {
+    "total": 5,
+    "successful": 5,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": 1000,
+    "max_score": 0,
+    "hits": []
+  },
+  "aggregations": {
+    "low_value": {
+      "doc_count": 164,
+      "avg_amount": {
+        "value": 32.59371952894257
+      }
+    }
+  }
+}
+```
+
+* we see that query returns 1000 docs. but the filter we apply limits the number the aggregation runs on to 164.
+
+### Lecture 103 - Defining bucket rules with filters
+
+* we will see "filters" aggregagations to define rules on which bucket docs are placed into. it defines query names based on which docs are place on buckets. the synstax is weird
+* we have "filters" aggrgation with a "filters" clause in it. in it we define the bucket names with a query in them to filter the docs that go in the bucket
+
+```
+GET /recipe/default/_search
+{
+  "size": 0,
+  "aggs": {
+    "my_filter": {
+      "filters": {
+        "filters": {
+          "pasta": {
+            "match": { 
+              "title": "pasta"
+            }
+          },
+          "spaghetti": {
+            "match": {
+              "title": "spaghetti"
+            }
+          }
+        }
+      },
+      "aggs": {
+        "avg_rating": {
+          "avg": {
+            "field": "ratings"
+          }
+        }
+      }
+    }
+  }
+}
+# result
+{
+  "took": 2,
+  "timed_out": false,
+  "_shards": {
+    "total": 5,
+    "successful": 5,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": 21,
+    "max_score": 0,
+    "hits": []
+  },
+  "aggregations": {
+    "my_filter": {
+      "buckets": {
+        "pasta": {
+          "doc_count": 9,
+          "avg_rating": {
+            "value": 3.4125
+          }
+        },
+        "spaghetti": {
+          "doc_count": 4,
+          "avg_rating": {
+            "value": 2.3684210526315788
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+* of course we can add subaggregations in the buckets
+
+### Lecture 104 - Range Aggregations
+
+* there are 2 range aggregations "range" and "date_range" optimized for dates
+* they define ranges each of which represents a bucket of docs (a range rule per bucket)
+* the syntax is: "range" is the aggregation type. then the field it is applied. the with "ranges" we have an array or range rules that set the buckets
+
+```
+GET /order/default/_search
+{
+  "size": 0,
+  "aggs": {
+    "amount_distribution": {
+      "range": {
+        "field": "total_amount",
+        "ranges": [
+          {
+            "to": 50
+          },
+          {
+            "from": 50,
+            "to": 100
+          },
+          {
+            "from": 100
+          }
+        ]
+      }
+    }
+  }
+}
+# reply
+{
+  "took": 5,
+  "timed_out": false,
+  "_shards": {
+    "total": 5,
+    "successful": 5,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": 1000,
+    "max_score": 0,
+    "hits": []
+  },
+  "aggregations": {
+    "amount_distribution": {
+      "buckets": [
+        {
+          "key": "*-50.0",
+          "to": 50,
+          "doc_count": 164
+        },
+        {
+          "key": "50.0-100.0",
+          "from": 50,
+          "to": 100,
+          "doc_count": 347
+        },
+        {
+          "key": "100.0-*",
+          "from": 100,
+          "doc_count": 489
+        }
+      ]
+    }
+  }
+}
+```
+
+* from is included and to is excluded
+* for date range instead of "range" we use "date_range", also in from and to we use dates (date math is allowed)
+* we can pass a date format in the date range aggregation, format is defined at the top under the field
+
+```
+GET /order/default/_search
+{
+  "size": 0,
+  "aggs": {
+    "purchased_ranges": {
+      "date_range": {
+        "field": "purchased_at",
+        "format": "yyyy-MM-dd", 
+        "ranges": [
+          {
+            "from": "2016-01-01",
+            "to": "2016-01-01||+6M"
+          },
+          {
+            "from": "2016-01-01||+6M",
+            "to": "2016-01-01||+1y"
+          }
+        ]
+      },
+      "aggs": {
+        "bucket_stats": {
+          "stats": {
+            "field": "total_amount" 
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### Lecture 105 - Histograms
+
+* histogram is a good way to define range for buckets if we dont know the values beforehand. with the "histogram" aggregation type we set an interval and elasticsearch distributes dynamicaly the docs in buckets in ranges set by intervals. 
+
+```
+GET /order/default/_search
+{
+  "size": 0,
+  "query": {
+    "range": {
+      "total_amount": {
+        "gte": 100
+      }
+    }
+  }, 
+  "aggs": {
+    "amount_distribution": {
+      "histogram": {
+        "field": "total_amount",
+        "interval": 25,
+        "min_doc_count": 0,
+        "extended_bounds": {
+          "min": 0,
+          "max": 500
+        }
+      }
+    }
+  }
+}
+```
+
+* docs are rounded to nearest bucket
+* with "min_doc_count" we can set a minimum  count per bucket (eg to prevent empty buckets)
+* with extended bounds we explicitly define the start anbd end of buckets even if buckets are empty (this contradicts with min_doc_count)
+* date histogram is supported , intervals are specd in date units
+* offset is supported and format as well
+```
+GET /order/default/_search
+{
+  "size": 0,
+  "aggs": {
+    "orders_over_time": {
+      "date_histogram": {
+        "field": "purchased_at",
+        "interval": "month"
+      }
+    }
+  }
+}
+```
+
+### Lecture 106 - Global Aggregation
+
+* with aggregation type "global" we break out of query limitation so that even if query limits the results on which aggregation will be applied, global apllies the aggregation to the whole index
+
+```
+GET /order/default/_search
+{
+  "query": {
+    "range": {
+      "total_amount": {
+        "gte": 100
+      }
+    }
+  },
+  "size": 0,
+  "aggs": {
+    "all_orders": {
+      "global": {},
+      "aggs": {
+        "stats_amount": {
+          "stats": {
+            "field": "total_amount"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+* global creates a global bucket on which we run the sub aggregations
+* there is no point to place a global aggregation as a sub-aggregation
+
+### Lecture 107 - Missing field values
+
+* what if we aggregate on a field and some docs dont have this field
+
+```
+GET /order/default/_search
+{
+  "size": 0,
+  "aggs": {
+    "orders_without_status": {
+      "missing": {
+        "field": "status"
+      }
+    }
+  }
+}
+# returns docs with not status (missing or null)
+```
+
+* i can add subagreggations to teh missing bucket
+
+### Lecture 108 - Aggregating nested objects
+
+* we try to issue an aggregation on a nested object field of the docs . the result is null
+
+```
+GET /department/default/_search
+{
+  "size": 0,
+  "aggs": {
+    "minimum_age": {
+      "min": {
+        "field": "employees.age"
+      }
+    }
+  }
+}
+```
+
+* like nested queries we need to set the path t o the nested object field
+* we formulte anested aggregation
+
+```
+GET /department/default/_search
+{
+  "size": 0,
+  "aggs": {
+    "employees": {
+      "nested": {
+        "path": "employees"
+      }
+    }
+  }
+}
+```
+
+* we get a bucket of 15 docs. so we can run sub aggregation on this
+
+```
+GET /department/default/_search
+{
+  "size": 0,
+  "aggs": {
+    "employees": {
+      "nested": {
+        "path": "employees"
+      },
+      "aggs": {
+        "minimum_age": {
+          "min": {
+            "field": "employees.age"
+          }
+        }
+      }
+    }
+  }
+}
+```
