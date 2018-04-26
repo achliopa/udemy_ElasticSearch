@@ -2890,8 +2890,376 @@ GET /recipe/default/_search
 
 ### Lecture 87 - Intro to the Section
 
+* use join datatype
 * [Join Data Type](https://www.elastic.co/guide/en/elasticsearch/reference/master/parent-join.html)
 
 ### Lecture 88 - Querying Nested Objects
+
+* nested is used for arrays of objects when we want to maintain the relationship between object properties. if a filed is defined as an array of objects an object is not independent because the object are mixed together when store in elastisearch.
+* we createe a new index named Departmentwhich contains a mapping for two two fields name and employees. employees is of "nested" as it will contain an array of objects. object fields are not mapped as  they will be dynamic mapped by elastic when we add docs.
+
+```
+PUT /department
+{
+  "mappings": {
+    "default": {
+      "properties": {
+        "name": {
+          "type": "text"
+        },
+        "employees": {
+          "type": "nested"
+        }
+      }
+    }
+  }
+}
+```
+
+* next we add a doc in the new index with a number of employees. each object in the array contains name,age,gender,position
+
+```
+POST /department/default/1
+{
+  "name": "Development",
+  "employees": [
+    {
+      "name": "Eric Green",
+      "age": 39,
+      "gender": "M",
+      "position": "Big Data Specialist"
+    },
+    {
+      "name": "James Taylor",
+      "age": 27,
+      "gender": "M",
+      "position": "Software Developer"
+    },
+    {
+      "name": "Gary Jenkins",
+      "age": 21,
+      "gender": "M",
+      "position": "Intern"
+    },
+    {
+      "name": "Julie Powell",
+      "age": 26,
+      "gender": "F",
+      "position": "Intern"
+    },
+    {
+      "name": "Benjamin Smith",
+      "age": 46,
+      "gender": "M",
+      "position": "Senior Software Engineer"
+    }
+  ]
+}
+```
+
+* we add a second doc and now we are ready to query the nested field (employees). we want to know which departments have female interns. as these are 2 queries we wrap them in a bool query. so with what we knbow we form a boolean query
+
+```
+GET /department/default/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "employees.position": "intern"
+          }
+        },
+        {
+          "term": {
+            "employees.gender.keyword": {
+              "value": "F"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+* we get 0 hits. nested types are not queried this way. they need a speacial query type named "nested". "nested" wraps a "path" property . this sis the path to the array of objects our wrapped query will be performed on. as our nested query will be perfomed on each object in the array. as 1to1 relationship only nested query type can reconstruct it and search it
+
+```
+GET /department/default/_search
+{
+  "query": {
+    "nested": {
+      "path": "employees",
+      "query": {
+        "bool": {
+          "must": [
+            {
+              "match": {
+                "employees.position": "intern"
+              }
+            },
+            {
+              "term": {
+                "employees.gender.keyword": {
+                  "value": "F"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+```
+
+## Section 12 - Controlling Query Results
+
+### Lecture 89 - Specifying the result format
+
+* we will see how to format the result in YAML instead of JSON, and how to make results pretty in case of JSON
+* to get results in yaml we set in usi the param format=yaml
+
+```
+GET /recipe/default/_search?format=yaml
+{
+  "query": {
+    "match": {
+      "title": "pasta"
+    }
+  }
+}
+# result
+---
+took: 2
+timed_out: false
+_shards:
+  total: 5
+  successful: 5
+  skipped: 0
+  failed: 0
+hits:
+  total: 9
+  max_score: 1.2756016
+  hits:
+.............
+```
+* making JSON pretty is irrelevant for kibana de tools console as it does prettygy JSON. but in files or raw format we need to pretify JSON. we do this with ?pretty query param in URI. if we cp the query in curl and remove the generated ?pretty flag our result is compressed. prettifying JSON consumes resources
+
+```
+#result
+{"took":2,"timed_out":false,"_shards":{"total":5,"successful":5,"skipped":0,"failed":0},"hits":{"total":9,"max_score":1.2756016,"hits":[{"_index":"recipe","_type":"default","_id":"2","_score":1.2756016,"_source":{"title":"Pasta With Butternut Squash and Sage Brown Butter","description":"Brown butter-based pasta sauces are some of the simplest things around. They're emulsions made with a flavorful fat and pasta cooking water that coats the pasta in a thin, creamy sheen of flavor. Throw in some saut\u00e9ed squash and some sage and you've got yourself a great 30-minute meal. It's a classic fall and winter dish that can be made right on the stovetop.","preparation_time_minutes":30,"servings":{"min":4,"max":6},"steps":["Heat olive oil in a large 
+```
+
+### Lecture 90 - Source Filtering
+
+* we will learn to control which parts of the "_source" field are returned for each of the matches
+* by default the whole content gets returned
+* the rationale for limiting whats returned is to reduce traffic in network
+* in apps with a lot of documents or long textfields it can make a difference.
+* we can disable the complete "_source" altogether (if we want just ids) and then retrieve docs from other data store
+* we can disable "_source" by preceding the "query" with "_source": false
+
+```
+GET /recipe/default/_search
+{
+  "_source": false, 
+  "query": {
+    "match": {
+      "title": "pasta"
+    }
+  }
+}
+```
+
+* return  only one field from "_source" `"_source`: "created"
+* for nested fields we use "<parent>.<child>"" `"_source": "ingredients.name"`
+* we can use wildcards * to get all fiends fom an object `"_source": "ingredients.*"
+`
+* if i want to get back a number of fields i set them in an array `"_source": ["ungredients.*", "created"]`
+* i can include and exclude by using the following syntax
+
+```
+"_source": {
+  "includes": "ingredients.*",
+  "excludes": "ingredients.name"
+}
+```
+* its like selecting which columns t rget back in a relational db query
+
+### Lecture 91 - Specifying the result size
+
+* we can define the number of hits to be returned in the URI on in the Request DSL body
+* URI `GET /<index>/<type>/_search?size=<max hits>`
+
+```
+GET /recipe/default/_search?size=2
+{
+  "_source": false, 
+  "query": {
+    "match": {
+      "title": "pasta"
+    }
+  }
+}
+# reply
+{
+  "took": 1,
+  "timed_out": false,
+  "_shards": {
+    "total": 5,
+    "successful": 5,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": 9,
+    "max_score": 1.2756016,
+    "hits": [
+      {
+        "_index": "recipe",
+        "_type": "default",
+        "_id": "2",
+        "_score": 1.2756016
+      },
+      {
+        "_index": "recipe",
+        "_type": "default",
+        "_id": "8",
+        "_score": 1.2540693
+      }
+    ]
+  }
+}
+```
+
+* the hit number is the total but hte hits array contains the
+* if i want to set the size limit in body (DSL query)
+
+```
+GET /recipe/default/_search
+{
+  "size": 2,
+  "_source": false, 
+  "query": {
+    "match": {
+      "title": "pasta"
+    }
+  }
+}
+```
+
+* the default size is 10
+
+### Lecture 92 - Specifying an  offset
+
+* offset allows s to paginate the results returned. this is useful when total hits exceed the default 10 or the size we specify.
+* size + offset do pagination. offset is set with "from" se either in URI or in body like the "size"
+
+```
+GET /recipe/default/_search
+{
+  "size": 2,
+  "from": 4, 
+  "_source": false, 
+  ...
+```
+
+### Lecture 93 - Pagination
+
+* in our elasticsearch client source code we need to calculate total_page = ceil(total_hits/page_size)
+* offset calculation: from (page_size * (page_number -1))
+* queries are stateless. if new data arrive our next page will contain tehm
+
+### Lecture 94 - Sorting Results
+
+* the way to sort results is by adding teh "sort" param in the query body. its value can be an array of the fields we wanto sort by
+
+```
+GET /recipe/default/_search
+{
+  "_source": false, 
+  "query": {
+    "match_all": {}
+  },
+  "sort": [
+    "preparation_time_minutes"
+  ]
+}
+```
+
+* the hits contain the sort field with the sorted field val in ascending order (default)
+* if we want better control on sort we pass order criteria as objects int he array
+
+```
+  "sort": [
+      {"created": "desc"}
+  ]
+```
+
+* in sorting dates are used as timestamps
+* if i want to sort on multile fields i put more elements in the sort array
+
+### Lecture 95 - Sorting with multi-value fields
+
+* we can sort on fields containing multiple vals
+
+```
+GET /recipe/default/_search
+{
+  "_source": "ratings", 
+  "query": {
+    "match_all": {}
+  },
+  "sort": [
+    {
+      "ratings": {
+        "order": "desc",
+        "mode": "avg"
+      }
+    }
+  ]
+}
+```
+
+* in the above example the ratings field is an array of floats. we sort on it in the standard way. however in the ratings field in the sort array we dond pass a simple value e.g desc but an object with two params. the order (asc, desc) and the mode (min,max,avg). the mode is what operates on the mutiple field values. produces a value on which we sort
+
+### Lecture 96 - Filters
+
+* we will talk onthe second context of elasticearch search API. the filter context. as we said before filter contex is boolean mathes or no (no relevance scores used). they are used on numbers and dates  eywords, enums. rather than text
+* in the past fitler context was used at the same level as query (root of search JSON body). in latestt version it is used as a query type usualy in a boolean query (composed query). it fits in a boolean query as it returns a boolean
+
+```
+GET /recipe/default/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "title": "pasta"
+          }
+        }
+      ],
+      "filter": [
+        {
+          "range": {
+            "preparation_time_minutes": {
+              "lte": 15
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+* filters are more efficient, elasticsearch caches frequently used filters
+
+## Section 13 - Aggregations
+
+### Lecture 97 - Intro to Aggregations
 
 * 
