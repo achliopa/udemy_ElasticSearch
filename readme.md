@@ -3813,3 +3813,14 @@ GET /department/default/_search
   }
 }
 ```
+
+## Section 14 - Improving Search Results
+
+
+### Lecture 110 - Proximity searches
+
+*
+
+### Lecture 111 - Affecting relevance scoring with proximity
+
+*
