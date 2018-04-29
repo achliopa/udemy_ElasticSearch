@@ -3817,10 +3817,234 @@ GET /department/default/_search
 ## Section 14 - Improving Search Results
 
 
-### Lecture 110 - Proximity searches
+### Lecture 111 - Proximity searches
 
-*
+* match phrase queries are quite strict. they require the terms in the phrase we spec out to appear in the field and to be in the order we spec out and in the distance we spec out (no in between words). this is because the phrase we use in the query passes from the smae analyzer like the text we apply it to. n inverted index terms have index and this index is used in the match phrase query
+* if we want to relax out query and let in between words in the text inverted index deviating from our exact query phrase we use the param "slop" and a number which  sets the allowed distance(in between terms) between the terms produced by our query . this makes the query a proximity query. we can say we search for the terms produced in our phrase within a proximity of one to the other speced by slop
+. if our defined slop distance distances the terms so much that they exceed the length of the searched text the inverted order of terms returns a match
 
-### Lecture 111 - Affecting relevance scoring with proximity
+### Lecture 112 - Affecting relevance scoring with proximity
 
-*
+*the proximity in which terms appear affects the relevance. the closest the proximity the highest the relevance
+* we want to create a complex query where we promote terms in close proximity but we dont retrict to it. match query is a full text so it is not wxclusive rather thanrelevance driven. in match query the default operator between terms is or
+
+```
+GET /proximity/default/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "title": {
+              "query": "spicy sauce"
+            }
+          }
+        }
+      ],
+      "should": [
+        {
+          "match_phrase": {
+            "title": {
+              "query": "spicy sauce",
+              "slop": 5
+            }
+          }
+        }
+      ]
+    }
+  }
+```
+
+### Lecture 113 - Fuzzy match query (handling typos)
+
+* the easiest way to handle user induces typos in qurty phrase is to add parameter "fuzziness" to the match query 
+
+```
+GET /product/default/_search
+{
+  "query": {
+    "match": {
+      "name": {
+        "query": "l0bster",
+        "fuzziness": "auto"
+      }
+    }
+  }
+}
+```
+
+* fuziness is defined with a number or auto. the number sets the number of characters that can deviate in our phrase from the inverted index terms (edit distance). max edit distance allowed is 
+* auto fuziness works as follows: term size 1-2 => edit distance - 0, term size 3-5 => max edit distance = 1, term size >5 => max edit distance = 22
+* in match queries of multiple terms the fuziness edit distanceis shared among words. also to use it we need the operator to be and
+* edit distace is the levenstein distance. another scientist added trasposition to the allowed edits (swaping letter order). we can disable transposition with `"fuzzy_transpositions": false`
+
+### Lecture 114 - Fuzzy Query
+
+* instead of adding fuzziness to a  match query there is a dedicaed query type called "fyzzy"
+
+```
+GET /product/default/_search
+{
+  "query": {
+    "match": {
+      "name": {
+        "query": "LOBSTER",
+        "fuzziness": "auto"
+      }
+    }
+  }
+}
+# returns 5 results
+GET /product/default/_search
+{
+  "query": {
+    "fuzzy": {
+      "name": {
+        "query": "LOBSTER",
+        "fuzziness": "auto"
+      }
+    }
+  }
+}
+# returns 0 results
+```
+
+* fuzzy query is a term level query so not analyzed so not lowercased bya filter
+* other than that it works the same way
+
+### Lecture 115 - Adding Synonyms
+
+* we add an index called synonyms to the cluster with a custom analyzer and custom totken filter, of type synonyms passing a synonyms list. 
+* the synonyms array has the syntax ["ayful => teriible", "awesome => great, super"]. this means replace term awful with terrible in inverted index
+* query go through same analisys so both awful and terrible will give a match. however term level queries dont use the analyzer
+* awesome produces 2 terms in inverted index so all 3 are treated the same after the analysis (i can use duble words in synonyms array). both synonyms are places in the same position in teh inverted index
+* the reason fro keeping both terms in same position is to perform proximity searches if required
+* synonims multiplicity can be opossite. one on right multiple on left "elasicsearch,logstash,kibana => elk", or i can put multiple words in teh array iwithout assignemtn to put them in same position in inverted index "weird,strange"
+* fitler order matters,  in the example lowercase filter is applied before synonyms filter. so our term assignemtns must be all lower case other wise we have bproblem
+* synonim filter must be placed before stemming and as early as possible in fitler array (except lowercase)
+* we can use _analyze API to test synonyms
+
+### Lecture - Adding Synonyms from File
+
+* we use "synonyms_path" param passing a path to the file
+* we can use relative path or absolute
+
+```
+PUT /synonyms
+{
+  "settings": {
+    "analysis": {
+      "filter": {
+        "synonym_test": {
+          "type": "synonym",
+          "synonyms_path": "analysis/synonyms.txt"
+        }
+      },
+      "analyzer": {
+        "my_analyzer": {
+          "tokenizer": "standard",
+          "filter": [
+            "lowercase",
+            "synonym_test"
+          ]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "default": {
+      "properties": {
+        "description": {
+          "type": "text",
+          "analyzer": "my_analyzer"
+        }
+      }
+    }
+  }
+}
+```
+
+* our file is a simple txt file with 1 rule per line , no quotation marks comments with #
+
+`````
+# synonyms.txt content
+
+awful => terrible
+awesome => great,super
+elasticsearch, logstash, kibana => elk
+weird, strange
+`````
+
+* if we add rules to the txt file and restart node then the existing documents are not updated .as indexing has already taken place. it affects new documents or updted old oones, this can create inconsistencies as the docs inverted intex does not contain the synonims while the query does as it goes throug the doc
+* the solution is _update_by_query API as it reindexes the docs
+
+### Lecture 117 - Highlighting matches in fields
+
+* [Highlighting](https://www.elastic.co/guide/en/elasticsearch/reference/current/search-request-highlighting.html)
+* elasticsearch can highlight matches mimicing popular search engines using a highlighter
+* test doc added to new index
+
+```
+POST /highlighting/default/1
+{
+  "description": "Let me tell you a story about Elasticsearch. It's a full-text search engine that is built on Apache Lucene. It's really easy to use, but also packs lots of advanced features that you can use to tweak its searching capabilities. Lots of well-known and established companies use Elasticsearch, and so should you!"
+}
+```
+
+* our query is formed, and we spec that we don't want the actual doc returned. but we add a param "highlight" with its syntax
+
+```
+GET /highlighting/default/_search
+{
+  "_source": false,
+  "query": {
+    "match": {
+      "description": "Elasticsearch story"
+    }
+  },
+  "highlight": {
+    "fields": {
+      "description": { }
+    }
+  }
+}
+# result
+{
+  "took": 4,
+  "timed_out": false,
+  "_shards": {
+    "total": 5,
+    "successful": 5,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": 1,
+    "max_score": 0.68324494,
+    "hits": [
+      {
+        "_index": "highlighting",
+        "_type": "default",
+        "_id": "1",
+        "_score": 0.68324494,
+        "highlight": {
+          "description": [
+            "Let me tell you a <em>story</em> about <em>Elasticsearch</em>.",
+            "Lots of well-known and established companies use <em>Elasticsearch</em>, and so should you!"
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
+* we see that reply includes a "higlight" object with the terms emphasized with HTML tags. these are text fragments
+* in indexing elasticsearch uses the analyzer for text and stores with the term also the start offset and the end offset in teh invertedf index. these offsets are used by highlight, synonyms also are taken into consideration when highlighting
+* we can customize the tags with the "pre_tags": ["<strong>"] "post_tags": ["</strong>"]
+
+### Lecture 118 - Stemming
+
+* highlighter highlights stem words as well
+* we add a stemmer filter in the analyzer and run some queries
